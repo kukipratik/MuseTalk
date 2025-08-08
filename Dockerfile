@@ -26,9 +26,9 @@ RUN conda init bash && \
     conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
 
 # Create conda environment and install Python + PyTorch (CUDA 11.8)
-RUN conda create -y -n musetalk python=3.10 \
- && conda install -y -n musetalk -c pytorch -c nvidia \
-      pytorch=2.0.1 torchvision=0.15.2 torchaudio=2.0.2 pytorch-cuda=11.8
+RUN conda create -y -n musetalk python=3.10
+SHELL ["conda", "run", "-n", "musetalk", "/bin/bash", "-c"]
+RUN conda install -y pytorch=2.1.2 torchvision=0.16.2 torchaudio=2.1.2 pytorch-cuda=11.8 -c pytorch -c nvidia
 
 # Activate environment, install pip requirements, mmlab
 COPY requirements.txt /workspace/requirements.txt
