@@ -145,10 +145,9 @@ ffmpeg -y -v warning -i data/audio/3.mp3 -i ./results/v15/avatars/lisa/temp.mp4 
 [mp3 @ 0x55c7cd3357c0] Estimating duration from bitrate, this may be inaccurate
 result is save to ./results/v15/avatars/lisa/vid_output/audio_3.mp4
 
-
 (musetalk) root@bd124c3fc8d3:/workspace/MuseTalk#
 
-
-
+// 5th try
+preparation: False: 25 fps, 720 p, 2.6sec avatar video:: audio: 3 sec -> took: 1min 58 sec
 
 
