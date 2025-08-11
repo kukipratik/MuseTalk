@@ -1,8 +1,14 @@
 import os
+# Environment tweaks to cut startup noise & overhead
 os.environ.setdefault("TRANSFORMERS_NO_TF", "1")     # don't import TensorFlow at all
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")   # silence TF logs if it somehow loads
 os.environ.setdefault("CUDA_MODULE_LOADING", "LAZY") # faster CUDA startup on some drivers
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("TORCH_SHOW_DEPRECATION_WARNINGS", "0")
+
+import warnings
+warnings.filterwarnings("ignore", message="Decorating classes is deprecated")
+warnings.filterwarnings("ignore", message="TypedStorage is deprecated")
 
 import argparse
 from omegaconf import OmegaConf
@@ -57,7 +63,18 @@ def osmakedirs(path_list):
         os.makedirs(path) if not os.path.exists(path) else None
 
 
-@torch.no_grad()
+def _read_imgs_fast(file_list):
+    """Super-light image reader that avoids importing heavy preprocessing (DWPose)."""
+    imgs = []
+    for p in file_list:
+        im = cv2.imread(p)
+        if im is None:
+            continue
+        im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+        imgs.append(im)
+    return imgs
+
+
 class Avatar:
     def __init__(self, avatar_id, video_path, bbox_shift, batch_size, preparation):
         self.avatar_id = avatar_id
@@ -128,20 +145,20 @@ class Avatar:
                 self._load_cached_materials()
 
     def _load_cached_materials(self):
-        # lightweight helpers imported here to avoid heavy DWPose init at program start
-        from musetalk.utils.preprocessing import read_imgs
-
+        """Fast path: no heavy imports. Avoids DWPose/S3FD on prep=False startup."""
         self.input_latent_list_cycle = torch.load(self.latents_out_path)
         with open(self.coords_path, 'rb') as f:
             self.coord_list_cycle = pickle.load(f)
+
         input_img_list = glob.glob(os.path.join(self.full_imgs_path, '*.[jpJP][pnPN]*[gG]'))
         input_img_list = sorted(input_img_list, key=lambda x: int(os.path.splitext(os.path.basename(x))[0]))
-        self.frame_list_cycle = read_imgs(input_img_list)
+        self.frame_list_cycle = _read_imgs_fast(input_img_list)
+
         with open(self.mask_coords_path, 'rb') as f:
             self.mask_coords_list_cycle = pickle.load(f)
         input_mask_list = glob.glob(os.path.join(self.mask_out_path, '*.[jpJP][pnPN]*[gG]'))
         input_mask_list = sorted(input_mask_list, key=lambda x: int(os.path.splitext(os.path.basename(x))[0]))
-        self.mask_list_cycle = read_imgs(input_mask_list)
+        self.mask_list_cycle = _read_imgs_fast(input_mask_list)
 
     def prepare_material(self):
         print("preparing data materials ... ...")
