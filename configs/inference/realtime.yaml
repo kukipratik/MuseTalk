@@ -3,7 +3,7 @@ lisa:
  bbox_shift: 5
  video_path: "data/video/lisa26.mp4"
  audio_clips:
-    audio_3: "data/audio/2.mp3"
+    audio_3: "data/audio/3.mp3"
  
   
 
