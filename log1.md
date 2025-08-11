@@ -148,6 +148,71 @@ result is save to ./results/v15/avatars/lisa/vid_output/audio_3.mp4
 (musetalk) root@bd124c3fc8d3:/workspace/MuseTalk#
 
 // 5th try
-preparation: False: 25 fps, 720 p, 2.6sec avatar video:: audio: 3 sec -> took: 1min 58 sec
+preparation: False: 25 fps, 720 p, 2.6sec avatar video:: audio: 3 sec -> took: 1min 29 sec
 
+(musetalk) root@bd124c3fc8d3:/workspace/MuseTalk# sh inference.sh v1.5 realtime
+2025-08-11 07:16:17.638008: I tensorflow/core/util/port.cc:110] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-08-11 07:16:17.695391: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-08-11 07:16:21.520975: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+Loads checkpoint by local backend from path: ./models/dwpose/dw-ll_ucoco_384.pth
+cuda start
+/workspace/miniconda3/envs/musetalk/lib/python3.10/site-packages/torch/utils/_contextlib.py:125: UserWarning: Decorating classes is deprecated and will be disabled in future versions. You should only decorate functions or methods. To preserve the current behavior of class decoration, you can directly decorate the `__init__` method and nothing else.
+  warnings.warn("Decorating classes is deprecated and will be disabled in "
+An error occurred while trying to fetch models/sd-vae: Error no file named diffusion_pytorch_model.safetensors found in directory models/sd-vae.
+Defaulting to unsafe serialization. Pass `allow_pickle=False` to raise an error instead.
+/workspace/miniconda3/envs/musetalk/lib/python3.10/site-packages/torch/_utils.py:776: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()
+  return self.fget.__get__(instance, owner)()
+load unet model from ./models/musetalkV15/unet.pth
+{'lisa': {'preparation': False, 'bbox_shift': 5, 'video_path': 'data/video/lisa26.mp4', 'audio_clips': {'audio_4': 'data/audio/4.mp3'}}}
+reading images...
+100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 134/134 [00:01<00:00, 73.44it/s]
+reading images...
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 134/134 [00:00<00:00, 291.93it/s]
+Inferring using: data/audio/4.mp3
+start inference
+processing audio:data/audio/4.mp3 costs 6014.147996902466ms
+84
+100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 5/5 [00:05<00:00,  1.18s/it]
+Total process time of 84 frames including saving images = 7.666594982147217s
+ffmpeg -y -v warning -r 25 -f image2 -i ./results/v15/avatars/lisa/tmp/%08d.png -vcodec libx264 -vf format=yuv420p -crf 18 ./results/v15/avatars/lisa/temp.mp4
+ffmpeg -y -v warning -i data/audio/4.mp3 -i ./results/v15/avatars/lisa/temp.mp4 ./results/v15/avatars/lisa/vid_output/audio_4.mp4
+[mp3 @ 0x561dda98f7c0] Estimating duration from bitrate, this may be inaccurate
+result is save to ./results/v15/avatars/lisa/vid_output/audio_4.mp4
 
+(musetalk) root@bd124c3fc8d3:/workspace/MuseTalk#
+
+// 6th try
+preparation: False: 25 fps, 720 p, 2.6sec avatar video:: audio (same audio as 5th): 3 sec -> took: 1min 06 sec
+
+(musetalk) root@bd124c3fc8d3:/workspace/MuseTalk# sh inference.sh v1.5 realtime
+2025-08-11 07:18:46.845494: I tensorflow/core/util/port.cc:110] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+2025-08-11 07:18:46.903470: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2025-08-11 07:18:50.991558: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+Loads checkpoint by local backend from path: ./models/dwpose/dw-ll_ucoco_384.pth
+cuda start
+/workspace/miniconda3/envs/musetalk/lib/python3.10/site-packages/torch/utils/_contextlib.py:125: UserWarning: Decorating classes is deprecated and will be disabled in future versions. You should only decorate functions or methods. To preserve the current behavior of class decoration, you can directly decorate the `__init__` method and nothing else.
+  warnings.warn("Decorating classes is deprecated and will be disabled in "
+An error occurred while trying to fetch models/sd-vae: Error no file named diffusion_pytorch_model.safetensors found in directory models/sd-vae.
+Defaulting to unsafe serialization. Pass `allow_pickle=False` to raise an error instead.
+/workspace/miniconda3/envs/musetalk/lib/python3.10/site-packages/torch/_utils.py:776: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()
+  return self.fget.__get__(instance, owner)()
+load unet model from ./models/musetalkV15/unet.pth
+{'lisa': {'preparation': False, 'bbox_shift': 5, 'video_path': 'data/video/lisa26.mp4', 'audio_clips': {'audio_4': 'data/audio/4.mp3'}}}
+reading images...
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 134/134 [00:01<00:00, 104.54it/s]
+reading images...
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 134/134 [00:00<00:00, 633.11it/s]
+Inferring using: data/audio/4.mp3
+start inference
+processing audio:data/audio/4.mp3 costs 3136.5153789520264ms
+84
+100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 5/5 [00:05<00:00,  1.07s/it]
+Total process time of 84 frames including saving images = 6.667635440826416s
+ffmpeg -y -v warning -r 25 -f image2 -i ./results/v15/avatars/lisa/tmp/%08d.png -vcodec libx264 -vf format=yuv420p -crf 18 ./results/v15/avatars/lisa/temp.mp4
+ffmpeg -y -v warning -i data/audio/4.mp3 -i ./results/v15/avatars/lisa/temp.mp4 ./results/v15/avatars/lisa/vid_output/audio_4.mp4
+[mp3 @ 0x56536963c7c0] Estimating duration from bitrate, this may be inaccurate
+result is save to ./results/v15/avatars/lisa/vid_output/audio_4.mp4
+
+(musetalk) root@bd124c3fc8d3:/workspace/MuseTalk#
