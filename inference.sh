@@ -5,6 +5,12 @@
 # To run v1.0 inference: sh inference.sh v1.0 [normal|realtime]
 # To run v1.5 inference: sh inference.sh v1.5 [normal|realtime]
 
+# --- Optional: force offline + disable safetensors downloads ---
+# export HF_HUB_OFFLINE=1
+# export DIFFUSERS_OFFLINE=1
+# export HF_HUB_DISABLE_TELEMETRY=1
+# export DIFFUSERS_USE_SAFETENSORS=0
+
 # Check if the correct number of arguments is provided
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <version> <mode>"
@@ -47,6 +53,9 @@ else
     exit 1
 fi
 
+# VAE dir (explicit so we never try downloading .safetensors)
+vae_dir="./models/sd-vae"
+
 # Set script name based on mode
 if [ "$mode" = "normal" ]; then
     script_name="scripts.inference"
@@ -59,13 +68,13 @@ cmd_args="--inference_config $config_path \
     --result_dir $result_dir \
     --unet_model_path $unet_model_path \
     --unet_config $unet_config \
-    --version $version_arg"
+    --version $version_arg \
+    --vae_dir $vae_dir"
 
 # Add realtime-specific arguments if in realtime mode
 if [ "$mode" = "realtime" ]; then
     cmd_args="$cmd_args \
-    --fps 25 \
-    --version $version_arg"
+    --fps 25"
 fi
 
 # Run inference

@@ -64,7 +64,6 @@ class Avatar:
             self.base_path = f"./results/{args.version}/avatars/{avatar_id}"
         else:  # v1
             self.base_path = f"./results/avatars/{avatar_id}"
-            
         self.avatar_path = self.base_path
         self.full_imgs_path = f"{self.avatar_path}/full_imgs"
         self.coords_path = f"{self.avatar_path}/coords.pkl"
@@ -229,7 +228,7 @@ class Avatar:
                 continue
             mask = self.mask_list_cycle[self.idx % (len(self.mask_list_cycle))]
             mask_crop_box = self.mask_coords_list_cycle[self.idx % (len(self.mask_coords_list_cycle))]
-            combine_frame = get_image_blending(ori_frame,res_frame,bbox,mask,mask_crop_box)
+            combine_frame = get_image_blending(ori_frame, res_frame, bbox, mask, mask_crop_box)
 
             if skip_save_images is False:
                 cv2.imwrite(f"{self.avatar_path}/tmp/{str(self.idx).zfill(8)}.png", combine_frame)
@@ -262,19 +261,22 @@ class Avatar:
         process_thread = threading.Thread(target=self.process_frames, args=(res_frame_queue, video_num, skip_save_images))
         process_thread.start()
 
-        gen = datagen(whisper_chunks,
-                     self.input_latent_list_cycle,
-                     self.batch_size)
+        gen = datagen(
+            whisper_chunks,
+            self.input_latent_list_cycle,
+            self.batch_size
+        )
         start_time = time.time()
-        res_frame_list = []
 
         for i, (whisper_batch, latent_batch) in enumerate(tqdm(gen, total=int(np.ceil(float(video_num) / self.batch_size)))):
             audio_feature_batch = pe(whisper_batch.to(device))
             latent_batch = latent_batch.to(device=device, dtype=unet.model.dtype)
 
-            pred_latents = unet.model(latent_batch,
-                                    timesteps,
-                                    encoder_hidden_states=audio_feature_batch).sample
+            pred_latents = unet.model(
+                latent_batch,
+                timesteps,
+                encoder_hidden_states=audio_feature_batch
+            ).sample
             pred_latents = pred_latents.to(device=device, dtype=vae.vae.dtype)
             recon = vae.decode_latents(pred_latents)
             for res_frame in recon:
@@ -318,6 +320,7 @@ if __name__ == "__main__":
     parser.add_argument("--ffmpeg_path", type=str, default="./ffmpeg-4.4-amd64-static/", help="Path to ffmpeg executable")
     parser.add_argument("--gpu_id", type=int, default=0, help="GPU ID to use")
     parser.add_argument("--vae_type", type=str, default="sd-vae", help="Type of VAE model")
+    parser.add_argument("--vae_dir", type=str, default="./models/sd-vae", help="Directory of local SD VAE weights")
     parser.add_argument("--unet_config", type=str, default="./models/musetalk/musetalk.json", help="Path to UNet configuration file")
     parser.add_argument("--unet_model_path", type=str, default="./models/musetalk/pytorch_model.bin", help="Path to UNet model weights")
     parser.add_argument("--whisper_dir", type=str, default="./models/whisper", help="Directory containing Whisper model")
@@ -335,10 +338,11 @@ if __name__ == "__main__":
     parser.add_argument("--parsing_mode", default='jaw', help="Face blending parsing mode")
     parser.add_argument("--left_cheek_width", type=int, default=90, help="Width of left cheek region")
     parser.add_argument("--right_cheek_width", type=int, default=90, help="Width of right cheek region")
-    parser.add_argument("--skip_save_images",
-                       action="store_true",
-                       help="Whether skip saving images for better generation speed calculation",
-                       )
+    parser.add_argument(
+        "--skip_save_images",
+        action="store_true",
+        help="Whether skip saving images for better generation speed calculation",
+    )
 
     args = parser.parse_args()
 
@@ -359,7 +363,8 @@ if __name__ == "__main__":
         unet_model_path=args.unet_model_path,
         vae_type=args.vae_type,
         unet_config=args.unet_config,
-        device=device
+        device=device,
+        vae_dir=args.vae_dir,
     )
     timesteps = torch.tensor([0], device=device)
 
@@ -398,12 +403,15 @@ if __name__ == "__main__":
             video_path=video_path,
             bbox_shift=bbox_shift,
             batch_size=args.batch_size,
-            preparation=data_preparation)
+            preparation=data_preparation
+        )
 
         audio_clips = inference_config[avatar_id]["audio_clips"]
         for audio_num, audio_path in audio_clips.items():
             print("Inferring using:", audio_path)
-            avatar.inference(audio_path,
-                           audio_num,
-                           args.fps,
-                           args.skip_save_images)
+            avatar.inference(
+                audio_path,
+                audio_num,
+                args.fps,
+                args.skip_save_images
+            )
