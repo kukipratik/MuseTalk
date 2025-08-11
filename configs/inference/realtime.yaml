@@ -1,9 +1,9 @@
 lisa:
- preparation: True # your can set it to False if you want to use the existing avator, it will save time
+ preparation: False # your can set it to False if you want to use the existing avator, it will save time
  bbox_shift: 5
  video_path: "data/video/lisa26.mp4"
  audio_clips:
-    audio_3: "data/audio/1.mp3"
+    audio_3: "data/audio/2.mp3"
  
   
 
