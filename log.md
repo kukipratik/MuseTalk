@@ -1,3 +1,5 @@
+// Normal reference; avatar video: 7s, avatar audio 7s -> took time like 5 mins
+
 (musetalk) root@bd124c3fc8d3:/workspace/MuseTalk# sh inference.sh v1.5 normal
 2025-08-11 05:17:15.313233: I tensorflow/core/util/port.cc:110] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
 2025-08-11 05:17:16.288441: I tensorflow/core/platform/cpu_feature_guard.cc:182] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
