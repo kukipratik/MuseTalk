@@ -302,6 +302,9 @@ class Avatar:
                 pred_latents = pred_latents.to(device=R.device, dtype=R.vae.vae.dtype, non_blocking=True)
                 recon = R.vae.decode_latents(pred_latents)
                 for res_frame in recon:
+                    if res_frame.dtype != np.uint8:
+                        res_frame = res_frame.astype(np.uint8)
+                    res_frame = cv2.cvtColor(res_frame, cv2.COLOR_BGR2RGB)
                     res_frame_queue.put(res_frame)
 
         process_thread.join()
