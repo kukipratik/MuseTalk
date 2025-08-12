@@ -125,6 +125,7 @@ async def infer(
     - If `preparation=False`, the avatar must exist under results/{v}/avatars/{avatar_id}/
     - If `preparation=True`, provide `video_path` (mp4 or folder with .png frames) to (re)create the avatar cache.
     """
+    print(f"⏳ /infer called: avatar={avatar_id} fps={fps} prep={preparation} video_path={video_path}")
     t0 = time.perf_counter()
 
     # save audio to a temp file
