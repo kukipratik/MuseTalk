@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
     # audio + whisper
     audio_processor = AudioProcessor(feature_extractor_path=WHISPER_DIR)
     whisper = WhisperModel.from_pretrained(WHISPER_DIR, low_cpu_mem_usage=True)
-    whisper = whisper.to(device=device, dtype=torch.float16).eval()
+    whisper = whisper.to(device=device, dtype=torch.float32).eval()
     whisper.requires_grad_(False)
 
     # face parsing (used during avatar preparation)
