@@ -318,8 +318,10 @@ class Avatar:
             # faster mux
             cmd_img2video = (
                 f"ffmpeg -y -v warning -r {fps} -f image2 "
+                f"-color_range tv -colorspace bt709 -color_primaries bt709 -color_trc bt709 "
                 f"-i {self.avatar_path}/tmp/%08d.jpg "
-                f"-c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p "
+                f"-c:v libx264 -preset ultrafast -tune zerolatency "
+                f"-pix_fmt yuv420p -color_range tv -colorspace bt709 -color_primaries bt709 -color_trc bt709 "
                 f"{self.avatar_path}/temp.mp4"
             )
             print(cmd_img2video); os.system(cmd_img2video)
