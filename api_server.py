@@ -43,6 +43,7 @@ async def lifespan(app: FastAPI):
     # perf knobs
     torch.backends.cudnn.benchmark = True
     torch.backends.cuda.matmul.allow_tf32 = True
+    torch.set_float32_matmul_precision("high")
 
     # --- load nets ---
     vae, unet, pe = load_all_model(

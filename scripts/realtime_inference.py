@@ -9,6 +9,7 @@ from omegaconf import OmegaConf
 import numpy as np
 import cv2
 import torch
+from torch.cuda.amp import autocast
 import glob
 import pickle
 import sys
@@ -48,6 +49,14 @@ def inject_runtime(*, device, vae, unet, pe, whisper, audio_processor, timesteps
     R.timesteps = timesteps
     R.fp = fp
     R.weight_dtype = weight_dtype
+
+    # small perf nudge: channels-last on conv-heavy modules
+    try:
+        R.unet.model.to(memory_format=torch.channels_last)
+        R.vae.vae.to(memory_format=torch.channels_last)
+        R.pe.to(memory_format=torch.channels_last)
+    except Exception:
+        pass
 
 def _assert_runtime():
     missing = [k for k in ("device","vae","unet","pe","whisper","audio_processor","timesteps","fp","weight_dtype")
@@ -269,7 +278,9 @@ class Avatar:
         print("start inference")
         # -------- audio feature extraction --------
         t0 = time.time()
-        whisper_input_features, librosa_length = R.audio_processor.get_audio_feature(audio_path, weight_dtype=R.weight_dtype)
+        whisper_input_features, librosa_length = R.audio_processor.get_audio_feature(
+            audio_path, weight_dtype=R.weight_dtype
+        )
         whisper_chunks = R.audio_processor.get_whisper_chunk(
             whisper_input_features,
             R.device,
@@ -294,16 +305,26 @@ class Avatar:
         t1 = time.time()
 
         with torch.inference_mode():
-            for _, (whisper_batch, latent_batch) in enumerate(tqdm(gen, total=int(np.ceil(float(video_num) / self.batch_size)))):
-                audio_feature_batch = R.pe(whisper_batch.to(R.device, non_blocking=True))
-                latent_batch = latent_batch.to(device=R.device, dtype=R.unet.model.dtype, non_blocking=True)
+            # autocast for UNet/VAE forward (weights already half)
+            for _, (whisper_batch, latent_batch) in enumerate(
+                tqdm(gen, total=int(np.ceil(float(video_num) / self.batch_size)))
+            ):
+                with autocast(device_type="cuda", dtype=torch.float16):
+                    audio_feature_batch = R.pe(whisper_batch.to(R.device, non_blocking=True))
+                    latent_batch = latent_batch.to(device=R.device, dtype=R.unet.model.dtype, non_blocking=True)
+                    latent_batch = latent_batch.contiguous(memory_format=torch.channels_last)
 
-                pred_latents = R.unet.model(latent_batch, R.timesteps, encoder_hidden_states=audio_feature_batch).sample
-                pred_latents = pred_latents.to(device=R.device, dtype=R.vae.vae.dtype, non_blocking=True)
-                recon = R.vae.decode_latents(pred_latents)
+                    pred_latents = R.unet.model(
+                        latent_batch, R.timesteps, encoder_hidden_states=audio_feature_batch
+                    ).sample
+
+                    # decode in fp16 under autocast
+                    recon = R.vae.decode_latents(pred_latents)
+
                 for res_frame in recon:
                     if res_frame.dtype != np.uint8:
                         res_frame = res_frame.astype(np.uint8)
+                    # VAE returns BGR; convert to RGB for blending
                     res_frame = cv2.cvtColor(res_frame, cv2.COLOR_BGR2RGB)
                     res_frame_queue.put(res_frame)
 
@@ -315,7 +336,7 @@ class Avatar:
             print(f'Total process time of {video_num} frames including saving images = {time.time() - t1:.3f}s')
 
         if out_vid_name is not None and not args.skip_save_images:
-            # faster mux
+            # faster mux + explicit color tags
             cmd_img2video = (
                 f"ffmpeg -y -v warning -r {fps} -f image2 "
                 f"-color_range tv -colorspace bt709 -color_primaries bt709 -color_trc bt709 "
@@ -377,6 +398,15 @@ if __name__ == "__main__":
     device = torch.device(f"cuda:{args.gpu_id}" if torch.cuda.is_available() else "cpu")
     torch.backends.cudnn.benchmark = True
     torch.backends.cuda.matmul.allow_tf32 = True
+    try:
+        torch.set_float32_matmul_precision("high")
+    except Exception:
+        pass
+    
+    # Debug log to confirm precision settings
+    p = torch.cuda.get_device_properties(0)
+    print(f"GPU: {p.name}, TF32={torch.backends.cuda.matmul.allow_tf32}, "
+        f"matmul_precision={torch.get_float32_matmul_precision()}")
 
     # Load models once
     vae, unet, pe = load_all_model(
@@ -389,6 +419,14 @@ if __name__ == "__main__":
     pe = pe.half().to(device)
     vae.vae = vae.vae.half().to(device)
     unet.model = unet.model.half().to(device)
+
+    # channels-last (small boost on Ampere+)
+    try:
+        unet.model.to(memory_format=torch.channels_last)
+        vae.vae.to(memory_format=torch.channels_last)
+        pe.to(memory_format=torch.channels_last)
+    except Exception:
+        pass
 
     audio_processor = AudioProcessor(feature_extractor_path=args.whisper_dir)
     whisper = WhisperModel.from_pretrained(args.whisper_dir)
