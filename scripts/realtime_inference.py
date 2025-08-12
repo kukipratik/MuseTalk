@@ -218,7 +218,8 @@ class Avatar:
         self.mask_list_cycle = []
 
         for i, frame in enumerate(tqdm(self.frame_list_cycle)):
-            cv2.imwrite(f"{self.full_imgs_path}/{str(i).zfill(8)}.png", frame)
+            bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            cv2.imwrite(f"{self.full_imgs_path}/{str(i).zfill(8)}.jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, 95])
 
             x1, y1, x2, y2 = self.coord_list_cycle[i]
             mode = args.parsing_mode if args.version == "v15" else "raw"
@@ -256,7 +257,8 @@ class Avatar:
             combine_frame = get_image_blending(ori_frame, res_frame, bbox, mask, mask_crop_box)
 
             if not skip_save_images:
-                cv2.imwrite(f"{self.avatar_path}/tmp/{str(self.idx).zfill(8)}.png", combine_frame)
+                bgr = cv2.cvtColor(combine_frame, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(f"{self.avatar_path}/tmp/{str(self.idx).zfill(8)}.jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, 95])
             self.idx += 1
 
     @torch.no_grad()
@@ -313,7 +315,7 @@ class Avatar:
             # faster mux
             cmd_img2video = (
                 f"ffmpeg -y -v warning -r {fps} -f image2 "
-                f"-i {self.avatar_path}/tmp/%08d.png "
+                f"-i {self.avatar_path}/tmp/%08d.jpg "
                 f"-c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p "
                 f"{self.avatar_path}/temp.mp4"
             )
