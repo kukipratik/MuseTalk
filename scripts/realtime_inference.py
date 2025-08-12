@@ -1,16 +1,10 @@
 import os
-# Environment tweaks to cut startup noise & overhead
-os.environ.setdefault("TRANSFORMERS_NO_TF", "1")     # don't import TensorFlow at all
-os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")   # silence TF logs if it somehow loads
-os.environ.setdefault("CUDA_MODULE_LOADING", "LAZY") # faster CUDA startup on some drivers
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-os.environ.setdefault("TORCH_SHOW_DEPRECATION_WARNINGS", "0")
-
 import warnings
 warnings.filterwarnings("ignore", message="Decorating classes is deprecated")
 warnings.filterwarnings("ignore", message="TypedStorage is deprecated")
 
 import argparse
+from types import SimpleNamespace
 from omegaconf import OmegaConf
 import numpy as np
 import cv2
@@ -23,7 +17,7 @@ import copy
 import json
 from transformers import WhisperModel
 
-# keep light modules up here
+# light utils
 from musetalk.utils.face_parsing import FaceParsing
 from musetalk.utils.utils import datagen, load_all_model
 from musetalk.utils.blending import get_image_prepare_material, get_image_blending
@@ -36,6 +30,35 @@ import time
 import subprocess
 
 
+# ---------------- Runtime injection ----------------
+R = SimpleNamespace(
+    device=None, vae=None, unet=None, pe=None,
+    whisper=None, audio_processor=None, timesteps=None,
+    fp=None, weight_dtype=None
+)
+
+def inject_runtime(*, device, vae, unet, pe, whisper, audio_processor, timesteps, fp, weight_dtype):
+    """Called by FastAPI at startup (or by CLI main) to register hot models once."""
+    R.device = device
+    R.vae = vae
+    R.unet = unet
+    R.pe = pe
+    R.whisper = whisper
+    R.audio_processor = audio_processor
+    R.timesteps = timesteps
+    R.fp = fp
+    R.weight_dtype = weight_dtype
+
+def _assert_runtime():
+    missing = [k for k in ("device","vae","unet","pe","whisper","audio_processor","timesteps","fp","weight_dtype")
+               if getattr(R, k) is None]
+    if missing:
+        raise RuntimeError(f"Runtime not injected; missing: {missing}. "
+                           "If using FastAPI, call inject_runtime() at app startup. "
+                           "If using CLI, run this module directly so __main__ injects it.")
+
+
+# ---------------- Helpers ----------------
 def fast_check_ffmpeg():
     try:
         subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
@@ -60,7 +83,7 @@ def video2imgs(vid_path, save_path, ext='.png', cut_frame=10_000_000):
 
 def osmakedirs(path_list):
     for path in path_list:
-        os.makedirs(path) if not os.path.exists(path) else None
+        os.makedirs(path, exist_ok=True)
 
 
 def _read_imgs_fast(file_list):
@@ -75,8 +98,11 @@ def _read_imgs_fast(file_list):
     return imgs
 
 
+# ---------------- Core Avatar runner ----------------
 class Avatar:
     def __init__(self, avatar_id, video_path, bbox_shift, batch_size, preparation):
+        _assert_runtime()
+
         self.avatar_id = avatar_id
         self.video_path = video_path
         self.bbox_shift = bbox_shift
@@ -105,48 +131,37 @@ class Avatar:
         self.init()
 
     def init(self):
+        # Server-safe behavior (no interactive prompts):
+        # - If preparation=True → (re)create deterministically
+        # - If preparation=False → load cache or error out clearly
         if self.preparation:
             if os.path.exists(self.avatar_path):
-                response = input(f"{self.avatar_id} exists, Do you want to re-create it ? (y/n)")
-                if response.lower() == "y":
-                    shutil.rmtree(self.avatar_path)
-                    print("*********************************")
-                    print(f"  creating avator: {self.avatar_id}")
-                    print("*********************************")
-                    osmakedirs([self.avatar_path, self.full_imgs_path, self.video_out_path, self.mask_out_path])
-                    self.prepare_material()
-                else:
-                    self._load_cached_materials()
-            else:
-                print("*********************************")
-                print(f"  creating avator: {self.avatar_id}")
-                print("*********************************")
-                osmakedirs([self.avatar_path, self.full_imgs_path, self.video_out_path, self.mask_out_path])
-                self.prepare_material()
+                shutil.rmtree(self.avatar_path)
+            osmakedirs([self.avatar_path, self.full_imgs_path, self.video_out_path, self.mask_out_path])
+            self.prepare_material()
         else:
             if not os.path.exists(self.avatar_path):
-                print(f"{self.avatar_id} does not exist, you should set preparation to True")
-                sys.exit()
-            with open(self.avatar_info_path, "r") as f:
-                avatar_info = json.load(f)
+                print(f"{self.avatar_id} does not exist. Run with preparation=True once for this avatar.")
+                sys.exit(1)
 
-            if avatar_info['bbox_shift'] != self.avatar_info['bbox_shift']:
-                response = input(f" 【bbox_shift】 is changed, you need to re-create it ! (c/continue)")
-                if response.lower() == "c":
-                    shutil.rmtree(self.avatar_path)
-                    print("*********************************")
-                    print(f"  creating avator: {self.avatar_id}")
-                    print("*********************************")
-                    osmakedirs([self.avatar_path, self.full_imgs_path, self.video_out_path, self.mask_out_path])
-                    self.prepare_material()
-                else:
-                    sys.exit()
+            # if bbox_shift changed, auto-recreate
+            try:
+                with open(self.avatar_info_path, "r") as f:
+                    avatar_info = json.load(f)
+            except Exception:
+                avatar_info = {}
+
+            if avatar_info.get('bbox_shift') != self.avatar_info['bbox_shift']:
+                shutil.rmtree(self.avatar_path)
+                osmakedirs([self.avatar_path, self.full_imgs_path, self.video_out_path, self.mask_out_path])
+                self.prepare_material()
             else:
                 self._load_cached_materials()
 
     def _load_cached_materials(self):
         """Fast path: no heavy imports. Avoids DWPose/S3FD on prep=False startup."""
-        self.input_latent_list_cycle = torch.load(self.latents_out_path)
+        # safer CPU map; move to GPU only when needed
+        self.input_latent_list_cycle = torch.load(self.latents_out_path, map_location="cpu")
         with open(self.coords_path, 'rb') as f:
             self.coord_list_cycle = pickle.load(f)
 
@@ -169,16 +184,15 @@ class Avatar:
             video2imgs(self.video_path, self.full_imgs_path, ext='png')
         else:
             print(f"copy files in {self.video_path}")
-            files = os.listdir(self.video_path)
-            files.sort()
-            files = [file for file in files if file.split(".")[-1] == "png"]
+            files = [fn for fn in sorted(os.listdir(self.video_path)) if fn.lower().endswith(".png")]
             for filename in files:
                 shutil.copyfile(f"{self.video_path}/{filename}", f"{self.full_imgs_path}/{filename}")
+
         input_img_list = sorted(glob.glob(os.path.join(self.full_imgs_path, '*.[jpJP][pnPN]*[gG]')))
 
         print("extracting landmarks...")
-        # heavy DWPose/S3FD import delayed to right here:
-        from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs
+        # heavy DWPose/S3FD import delayed to here:
+        from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs  # noqa: F401
 
         coord_list, frame_list = get_landmark_and_bbox(input_img_list, self.bbox_shift)
         input_latent_list = []
@@ -194,7 +208,7 @@ class Avatar:
                 coord_list[idx] = [x1, y1, x2, y2]
             crop_frame = frame[y1:y2, x1:x2]
             resized_crop_frame = cv2.resize(crop_frame, (256, 256), interpolation=cv2.INTER_LANCZOS4)
-            latents = vae.get_latents_for_unet(resized_crop_frame)
+            latents = R.vae.get_latents_for_unet(resized_crop_frame)
             input_latent_list.append(latents)
 
         self.frame_list_cycle = frame_list + frame_list[::-1]
@@ -208,7 +222,7 @@ class Avatar:
 
             x1, y1, x2, y2 = self.coord_list_cycle[i]
             mode = args.parsing_mode if args.version == "v15" else "raw"
-            mask, crop_box = get_image_prepare_material(frame, [x1, y1, x2, y2], fp=fp, mode=mode)
+            mask, crop_box = get_image_prepare_material(frame, [x1, y1, x2, y2], fp=R.fp, mode=mode)
 
             cv2.imwrite(f"{self.mask_out_path}/{str(i).zfill(8)}.png", mask)
             self.mask_coords_list_cycle.append(crop_box)
@@ -247,22 +261,24 @@ class Avatar:
 
     @torch.no_grad()
     def inference(self, audio_path, out_vid_name, fps, skip_save_images):
+        _assert_runtime()
+
         os.makedirs(self.avatar_path + '/tmp', exist_ok=True)
         print("start inference")
         # -------- audio feature extraction --------
         t0 = time.time()
-        whisper_input_features, librosa_length = audio_processor.get_audio_feature(audio_path, weight_dtype=weight_dtype)
-        whisper_chunks = audio_processor.get_whisper_chunk(
+        whisper_input_features, librosa_length = R.audio_processor.get_audio_feature(audio_path, weight_dtype=R.weight_dtype)
+        whisper_chunks = R.audio_processor.get_whisper_chunk(
             whisper_input_features,
-            device,
-            weight_dtype,
-            whisper,
+            R.device,
+            R.weight_dtype,
+            R.whisper,
             librosa_length,
             fps=fps,
             audio_padding_length_left=args.audio_padding_length_left,
             audio_padding_length_right=args.audio_padding_length_right,
         )
-        print(f"processing audio:{audio_path} costs {(time.time() - t0) * 1000}ms")
+        print(f"processing audio:{audio_path} costs {(time.time() - t0) * 1000:.2f}ms")
 
         # -------- UNet+VAE loop --------
         video_num = len(whisper_chunks)
@@ -275,39 +291,48 @@ class Avatar:
         gen = datagen(whisper_chunks, self.input_latent_list_cycle, self.batch_size)
         t1 = time.time()
 
-        for _, (whisper_batch, latent_batch) in enumerate(tqdm(gen, total=int(np.ceil(float(video_num) / self.batch_size)))):
-            audio_feature_batch = pe(whisper_batch.to(device))
-            latent_batch = latent_batch.to(device=device, dtype=unet.model.dtype)
+        with torch.inference_mode():
+            for _, (whisper_batch, latent_batch) in enumerate(tqdm(gen, total=int(np.ceil(float(video_num) / self.batch_size)))):
+                audio_feature_batch = R.pe(whisper_batch.to(R.device, non_blocking=True))
+                latent_batch = latent_batch.to(device=R.device, dtype=R.unet.model.dtype, non_blocking=True)
 
-            pred_latents = unet.model(latent_batch, timesteps, encoder_hidden_states=audio_feature_batch).sample
-            pred_latents = pred_latents.to(device=device, dtype=vae.vae.dtype)
-            recon = vae.decode_latents(pred_latents)
-            for res_frame in recon:
-                res_frame_queue.put(res_frame)
+                pred_latents = R.unet.model(latent_batch, R.timesteps, encoder_hidden_states=audio_feature_batch).sample
+                pred_latents = pred_latents.to(device=R.device, dtype=R.vae.vae.dtype, non_blocking=True)
+                recon = R.vae.decode_latents(pred_latents)
+                for res_frame in recon:
+                    res_frame_queue.put(res_frame)
 
         process_thread.join()
 
         if args.skip_save_images:
-            print(f'Total process time of {video_num} frames without saving images = {time.time() - t1}s')
+            print(f'Total process time of {video_num} frames without saving images = {time.time() - t1:.3f}s')
         else:
-            print(f'Total process time of {video_num} frames including saving images = {time.time() - t1}s')
+            print(f'Total process time of {video_num} frames including saving images = {time.time() - t1:.3f}s')
 
         if out_vid_name is not None and not args.skip_save_images:
-            cmd_img2video = f"ffmpeg -y -v warning -r {fps} -f image2 -i {self.avatar_path}/tmp/%08d.png -vcodec libx264 -vf format=yuv420p -crf 18 {self.avatar_path}/temp.mp4"
-            print(cmd_img2video)
-            os.system(cmd_img2video)
+            # faster mux
+            cmd_img2video = (
+                f"ffmpeg -y -v warning -r {fps} -f image2 "
+                f"-i {self.avatar_path}/tmp/%08d.png "
+                f"-c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p "
+                f"{self.avatar_path}/temp.mp4"
+            )
+            print(cmd_img2video); os.system(cmd_img2video)
 
             output_vid = os.path.join(self.video_out_path, out_vid_name + ".mp4")
-            cmd_combine_audio = f"ffmpeg -y -v warning -i {audio_path} -i {self.avatar_path}/temp.mp4 {output_vid}"
-            print(cmd_combine_audio)
-            os.system(cmd_combine_audio)
+            cmd_combine_audio = (
+                f"ffmpeg -y -v warning -i {audio_path} -i {self.avatar_path}/temp.mp4 "
+                f"-c:v copy -c:a aac -shortest {output_vid}"
+            )
+            print(cmd_combine_audio); os.system(cmd_combine_audio)
 
             os.remove(f"{self.avatar_path}/temp.mp4")
-            shutil.rmtree(f"{self.avatar_path}/tmp")
+            shutil.rmtree(f"{self.avatar_path}/tmp", ignore_errors=True)
             print(f"result is save to {output_vid}")
         print("\n")
 
 
+# ---------------- CLI entry (still supported) ----------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--version", type=str, default="v15", choices=["v1", "v15"], help="Version of MuseTalk: v1 or v15")
@@ -315,8 +340,8 @@ if __name__ == "__main__":
     parser.add_argument("--gpu_id", type=int, default=0, help="GPU ID to use")
     parser.add_argument("--vae_type", type=str, default="sd-vae", help="Type of VAE model")
     parser.add_argument("--vae_dir", type=str, default="./models/sd-vae", help="Directory of local SD VAE weights")
-    parser.add_argument("--unet_config", type=str, default="./models/musetalk/musetalk.json", help="Path to UNet configuration file")
-    parser.add_argument("--unet_model_path", type=str, default="./models/musetalk/pytorch_model.bin", help="Path to UNet model weights")
+    parser.add_argument("--unet_config", type=str, default="./models/musetalkV15/musetalk.json", help="Path to UNet configuration file")
+    parser.add_argument("--unet_model_path", type=str, default="./models/musetalkV15/unet.pth", help="Path to UNet model weights")
     parser.add_argument("--whisper_dir", type=str, default="./models/whisper", help="Directory containing Whisper model")
     parser.add_argument("--inference_config", type=str, default="configs/inference/realtime.yaml")
     parser.add_argument("--bbox_shift", type=int, default=0, help="Bounding box shift value")
@@ -333,22 +358,20 @@ if __name__ == "__main__":
     parser.add_argument("--left_cheek_width", type=int, default=90, help="Width of left cheek region")
     parser.add_argument("--right_cheek_width", type=int, default=90, help="Width of right cheek region")
     parser.add_argument("--skip_save_images", action="store_true", help="Whether skip saving images for better generation speed calculation")
-
     args = parser.parse_args()
 
     if not fast_check_ffmpeg():
         print("Adding ffmpeg to PATH")
         path_separator = ';' if sys.platform == 'win32' else ':'
-        os.environ["PATH"] = f"{args.ffmpeg_path}{path_separator}{os.environ['PATH']}"
+        os.environ["PATH"] = f"{args.ffmpeg_path}{path_separator}{os.environ.get('PATH','')}"
         if not fast_check_ffmpeg():
             print("Warning: Unable to find ffmpeg, please ensure ffmpeg is properly installed")
 
     device = torch.device(f"cuda:{args.gpu_id}" if torch.cuda.is_available() else "cpu")
-
-    # minor speed boost for convs with stable shapes
     torch.backends.cudnn.benchmark = True
+    torch.backends.cuda.matmul.allow_tf32 = True
 
-    # Load model weights first (so the "load unet model..." print appears earlier)
+    # Load models once
     vae, unet, pe = load_all_model(
         unet_model_path=args.unet_model_path,
         vae_type=args.vae_type,
@@ -356,22 +379,28 @@ if __name__ == "__main__":
         device=device,
         vae_dir=args.vae_dir,
     )
-    timesteps = torch.tensor([0], device=device)
-
     pe = pe.half().to(device)
     vae.vae = vae.vae.half().to(device)
     unet.model = unet.model.half().to(device)
 
     audio_processor = AudioProcessor(feature_extractor_path=args.whisper_dir)
-    weight_dtype = unet.model.dtype
     whisper = WhisperModel.from_pretrained(args.whisper_dir)
-    whisper = whisper.to(device=device, dtype=weight_dtype).eval()
+    whisper = whisper.to(device=device, dtype=unet.model.dtype).eval()
     whisper.requires_grad_(False)
 
     if args.version == "v15":
         fp = FaceParsing(left_cheek_width=args.left_cheek_width, right_cheek_width=args.right_cheek_width)
     else:
         fp = FaceParsing()
+
+    timesteps = torch.tensor([0], device=device)
+
+    # Inject for this process (CLI mode)
+    inject_runtime(
+        device=device, vae=vae, unet=unet, pe=pe, whisper=whisper,
+        audio_processor=audio_processor, timesteps=timesteps,
+        fp=fp, weight_dtype=unet.model.dtype
+    )
 
     inference_config = OmegaConf.load(args.inference_config)
     print(inference_config)
@@ -387,7 +416,6 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             preparation=data_preparation
         )
-
         audio_clips = inference_config[avatar_id]["audio_clips"]
         for audio_num, audio_path in audio_clips.items():
             print("Inferring using:", audio_path)

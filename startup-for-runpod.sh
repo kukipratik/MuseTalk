@@ -5,7 +5,7 @@ echo "[startup] begin"
 
 # ---------- system deps ----------
 apt-get update -y
-apt-get install -y --no-install-recommends rsync ffmpeg
+apt-get install -y --no-install-recommends ffmpeg
 rm -rf /var/lib/apt/lists/*
 
 # ---------- conda env ----------
@@ -23,47 +23,30 @@ export TF_CPP_MIN_LOG_LEVEL=3
 export CUDA_MODULE_LOADING=LAZY
 export TOKENIZERS_PARALLELISM=false
 export PYTHONUNBUFFERED=1
+# predictable CPU usage (tune if you do heavy CPU work)
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
 
-SRC=/workspace/MuseTalk
-DST=/root/musetalk_hot
+# Optional: faster temp I/O if you write frames; increase shm size on your pod if needed.
+export TMPDIR=/dev/shm
+mkdir -p /dev/shm/musetalk_tmp || true
 
-mkdir -p "$DST"
-echo "[startup] rsync -> $DST"
-rsync -a --delete "$SRC/" "$DST/"
+# ---------- app dir ----------
+cd /workspace/MuseTalk
+export PYTHONPATH="/workspace/MuseTalk:${PYTHONPATH:-}"
 
-cd "$DST"
-# SAFE expansion (fixes 'unbound variable')
-export PYTHONPATH="$DST:${PYTHONPATH:-}"
-
-# ---------- choose uvicorn app module ----------
-if [ -f "$DST/api/server.py" ]; then
+# ---------- choose uvicorn app ----------
+if [ -f "api/server.py" ]; then
   UVICORN_APP="api.server:app"
-elif [ -f "$DST/api_server.py" ]; then
+elif [ -f "api_server.py" ]; then
   UVICORN_APP="api_server:app"
 else
   echo "[startup] Could not find FastAPI app (api/server.py or api_server.py)."; exit 1
 fi
 export UVICORN_APP
 
-# ---------- warm up (load models once) ----------
-echo "[startup] warm-up: importing & loading weights"
-python - <<'PY'
-import torch
-from musetalk.utils.utils import load_all_model
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-vae, unet, pe = load_all_model(
-    unet_model_path="models/musetalkV15/unet.pth",
-    vae_type="sd-vae",
-    unet_config="models/musetalkV15/musetalk.json",
-    device=device,
-    vae_dir="models/sd-vae",
-)
-pe = pe.half().to(device)
-vae.vae = vae.vae.half().to(device)
-unet.model = unet.model.half().to(device)
-print("✅ Warm-up complete: models resident, first request will be hot.")
-PY
-
-# ---------- run server ----------
+# ---------- run server (warm-up happens inside FastAPI startup) ----------
 echo "[startup] starting uvicorn on :8000 -> $UVICORN_APP"
 exec uvicorn "$UVICORN_APP" --host 0.0.0.0 --port 8000 --workers 1
+# Tip: if you have uvloop/httptools installed, you can add:
+#   --loop uvloop --http httptools
