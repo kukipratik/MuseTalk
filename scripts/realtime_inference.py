@@ -309,7 +309,7 @@ class Avatar:
             for _, (whisper_batch, latent_batch) in enumerate(
                 tqdm(gen, total=int(np.ceil(float(video_num) / self.batch_size)))
             ):
-                with autocast(device_type="cuda", dtype=torch.float16):
+                with autocast(dtype=torch.float16):
                     audio_feature_batch = R.pe(whisper_batch.to(R.device, non_blocking=True))
                     latent_batch = latent_batch.to(device=R.device, dtype=R.unet.model.dtype, non_blocking=True)
                     latent_batch = latent_batch.contiguous(memory_format=torch.channels_last)
