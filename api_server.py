@@ -30,7 +30,7 @@ from scripts.realtime_inference import inject_runtime, Avatar
 UNET_MODEL_PATH = "models/musetalkV15/unet.pth"
 UNET_CONFIG_PATH = "models/musetalkV15/musetalk.json"
 VAE_DIR          = "models/sd-vae"          # contains diffusion_pytorch_model.bin
-WHISPER_DIR      = "models/whisper_tiny_en"
+WHISPER_DIR      = "models/whisper_tiny"
 VERSION          = "v15"
 DEFAULT_BATCH    = 20
 
@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
     # audio + whisper
     audio_processor = AudioProcessor(feature_extractor_path=WHISPER_DIR)
     whisper = WhisperModel.from_pretrained(WHISPER_DIR, low_cpu_mem_usage=True)
-    whisper = whisper.to(device=device, dtype=torch.float32).eval()
+    whisper = whisper.to(device=device, dtype=torch.float16).eval()
     whisper.requires_grad_(False)
 
     # face parsing (used during avatar preparation)

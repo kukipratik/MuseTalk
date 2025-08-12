@@ -349,7 +349,7 @@ if __name__ == "__main__":
     parser.add_argument("--vae_dir", type=str, default="./models/sd-vae", help="Directory of local SD VAE weights")
     parser.add_argument("--unet_config", type=str, default="./models/musetalkV15/musetalk.json", help="Path to UNet configuration file")
     parser.add_argument("--unet_model_path", type=str, default="./models/musetalkV15/unet.pth", help="Path to UNet model weights")
-    parser.add_argument("--whisper_dir", type=str, default="./models/whisper_tiny_en", help="Directory containing Whisper model")
+    parser.add_argument("--whisper_dir", type=str, default="./models/whisper_tiny", help="Directory containing Whisper model")
     parser.add_argument("--inference_config", type=str, default="configs/inference/realtime.yaml")
     parser.add_argument("--bbox_shift", type=int, default=0, help="Bounding box shift value")
     parser.add_argument("--result_dir", default='./results', help="Directory for output results")
