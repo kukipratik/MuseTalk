@@ -30,7 +30,7 @@ from scripts.realtime_inference import inject_runtime, Avatar
 UNET_MODEL_PATH = "models/musetalkV15/unet.pth"
 UNET_CONFIG_PATH = "models/musetalkV15/musetalk.json"
 VAE_DIR          = "models/sd-vae"          # contains diffusion_pytorch_model.bin
-WHISPER_DIR      = "models/whisper_tiny"
+WHISPER_DIR      = "models/whisper"
 VERSION          = "v15"
 DEFAULT_BATCH    = 20
 
