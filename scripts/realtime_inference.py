@@ -137,6 +137,7 @@ class Avatar:
         self.preparation = preparation
         self.batch_size = batch_size
         self.idx = 0
+        print(f"[Avatar] init avatar_id={avatar_id} bbox_shift={bbox_shift} prep={preparation}")
         self.init()
 
     def init(self):
@@ -269,6 +270,22 @@ class Avatar:
                 bgr = cv2.cvtColor(combine_frame, cv2.COLOR_RGB2BGR)
                 cv2.imwrite(f"{self.avatar_path}/tmp/{str(self.idx).zfill(8)}.jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, 95])
             self.idx += 1
+            
+    def _ensure_rgb(self, img: np.ndarray) -> np.ndarray:
+        """
+        Best-effort guard: if blue channel is suspiciously dominant on a skin-heavy crop,
+        assume it's BGR and swap to RGB. Otherwise return as-is.
+        """
+        if img.ndim != 3 or img.shape[2] != 3:
+            return img
+        # sample center 48x48 patch to avoid edges
+        h, w, _ = img.shape
+        y0, y1 = h//2 - 24, h//2 + 24
+        x0, x1 = w//2 - 24, w//2 + 24
+        patch = img[max(0,y0):min(h,y1), max(0,x0):min(w,x1)]
+        b, g, r = patch[...,0].mean(), patch[...,1].mean(), patch[...,2].mean()
+        # if blue >> red, it's almost surely BGR for skin; swap
+        return img[..., ::-1] if (b > r + 12 and b > g + 6) else img
 
     @torch.no_grad()
     def inference(self, audio_path, out_vid_name, fps, skip_save_images):
@@ -324,8 +341,11 @@ class Avatar:
                 for res_frame in recon:
                     if res_frame.dtype != np.uint8:
                         res_frame = res_frame.astype(np.uint8)
-                    # VAE returns BGR; convert to RGB for blending
-                    res_frame = cv2.cvtColor(res_frame, cv2.COLOR_BGR2RGB)
+
+                    # **Remove** unconditional cvtColor. Use the guard instead:
+                    res_frame = self._ensure_rgb(res_frame)
+
+                    # Keep everything in RGB for blending (your frames/masks are RGB)
                     res_frame_queue.put(res_frame)
 
         process_thread.join()
@@ -370,7 +390,7 @@ if __name__ == "__main__":
     parser.add_argument("--vae_dir", type=str, default="./models/sd-vae", help="Directory of local SD VAE weights")
     parser.add_argument("--unet_config", type=str, default="./models/musetalkV15/musetalk.json", help="Path to UNet configuration file")
     parser.add_argument("--unet_model_path", type=str, default="./models/musetalkV15/unet.pth", help="Path to UNet model weights")
-    parser.add_argument("--whisper_dir", type=str, default="./models/whisper_tiny", help="Directory containing Whisper model")
+    parser.add_argument("--whisper_dir", type=str, default="./models/whisper", help="Directory containing Whisper model")
     parser.add_argument("--inference_config", type=str, default="configs/inference/realtime.yaml")
     parser.add_argument("--bbox_shift", type=int, default=0, help="Bounding box shift value")
     parser.add_argument("--result_dir", default='./results', help="Directory for output results")
@@ -387,6 +407,7 @@ if __name__ == "__main__":
     parser.add_argument("--right_cheek_width", type=int, default=90, help="Width of right cheek region")
     parser.add_argument("--skip_save_images", action="store_true", help="Whether skip saving images for better generation speed calculation")
     args = parser.parse_args()
+    default_bbox_shift = args.bbox_shift
 
     if not fast_check_ffmpeg():
         print("Adding ffmpeg to PATH")
@@ -453,11 +474,12 @@ if __name__ == "__main__":
     for avatar_id in inference_config:
         data_preparation = inference_config[avatar_id]["preparation"]
         video_path = inference_config[avatar_id]["video_path"]
-        bbox_shift = 0 if args.version == "v15" else inference_config[avatar_id]["bbox_shift"]
+        cfg_shift = inference_config[avatar_id].get("bbox_shift", default_bbox_shift)
+        print(f"[Avatar:{avatar_id}] Using bbox_shift={cfg_shift}")
         avatar = Avatar(
             avatar_id=avatar_id,
             video_path=video_path,
-            bbox_shift=bbox_shift,
+            bbox_shift=cfg_shift,
             batch_size=args.batch_size,
             preparation=data_preparation
         )

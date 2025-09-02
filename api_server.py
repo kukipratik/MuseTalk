@@ -155,7 +155,7 @@ async def infer(
             avatar = Avatar(
                 avatar_id=avatar_id,
                 video_path=video_path or f"data/video/{avatar_id}.mp4",
-                bbox_shift=bbox_shift if VERSION != "v15" else 0,
+                bbox_shift=bbox_shift,
                 batch_size=batch_size,
                 preparation=preparation,
             )
