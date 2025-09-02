@@ -79,8 +79,11 @@ class VAE:
             )
             window.append(img)
         else:
-            # numpy array (assumed BGR)
-            img = cv2.cvtColor(img_or_path, cv2.COLOR_BGR2RGB)
+            # OLD (assumed BGR)
+            # img = cv2.cvtColor(img_or_path, cv2.COLOR_BGR2RGB)
+
+            # NEW (keep as RGB; upstream already RGB)
+            img = img_or_path.copy()
             img = cv2.resize(
                 img, (self._resized_img, self._resized_img), interpolation=cv2.INTER_LANCZOS4
             )
@@ -123,7 +126,11 @@ class VAE:
         image = (image / 2 + 0.5).clamp(0, 1)
         image = image.detach().cpu().permute(0, 2, 3, 1).float().numpy()
         image = (image * 255).round().astype("uint8")
-        image = image[..., ::-1]  # RGB -> BGR
+        # OLD
+        # image = image[..., ::-1]  # RGB -> BGR
+
+        # NEW
+        # keep as RGB
         return image
 
     def get_latents_for_unet(self, img) -> torch.Tensor:
