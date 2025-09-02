@@ -11,7 +11,7 @@ rm -rf /var/lib/apt/lists/*
 # ---------- conda env ----------
 if [ -f /workspace/miniconda3/etc/profile.d/conda.sh ]; then
   # shellcheck disable=SC1091
-  source /workspace/miniconda3/etc/profile.d/conda.sh
+  source /workspace/conda/etc/profile.d/conda.sh
   conda activate musetalk || { echo "[startup] conda env 'musetalk' missing"; exit 1; }
 else
   echo "[startup] conda not found at /workspace/miniconda3"; exit 1
