@@ -9,7 +9,7 @@ apt-get install -y --no-install-recommends ffmpeg
 rm -rf /var/lib/apt/lists/*
 
 # ---------- conda env ----------
-if [ -f /workspace/miniconda3/etc/profile.d/conda.sh ]; then
+if [ -f /workspace/conda/etc/profile.d/conda.sh ]; then
   # shellcheck disable=SC1091
   source /workspace/conda/etc/profile.d/conda.sh
   conda activate musetalk || { echo "[startup] conda env 'musetalk' missing"; exit 1; }
