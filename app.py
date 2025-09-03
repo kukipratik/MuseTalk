@@ -69,8 +69,14 @@ async def prepare_avatar(
             parsing_mode=parsing_mode
         )
     except Exception as e:
+        try: os.remove(ref_path)
+        except: pass
         log.exception("[/prepare_avatar] failed")
         raise HTTPException(status_code=400, detail=str(e))
+
+    # cleanup upload file immediately after success
+    try: os.remove(ref_path)
+    except: pass
 
     took = round(time.perf_counter() - t0, 2)
     log.info(f"[/prepare_avatar] done in {took}s | avatar_id={avatar_id} frames={info.get('num_frames')}")
@@ -113,8 +119,15 @@ async def lip_sync(
             audio_padding_right=audio_padding_right
         )
     except Exception as e:
+        # cleanup on error
+        try: os.remove(audio_path)
+        except: pass
         log.exception("[/lip_sync] failed")
         raise HTTPException(status_code=400, detail=str(e))
+
+    # cleaning
+    try: os.remove(audio_path)
+    except: pass
 
     took = round(time.perf_counter() - t0, 2)
     log.info(f"[/lip_sync] done in {took}s | avatar_id={avatar_id} -> {os.path.basename(out_video)}")
