@@ -3,7 +3,7 @@ avator_1:
  bbox_shift: 5
  video_path: "data/video/lisa.mp4"
  audio_clips:
-     audio_0: "data/audio/2.wav"
+     audio_2: "data/audio/2.wav"
  
   
 
