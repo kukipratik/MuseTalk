@@ -1,6 +1,6 @@
 import shutil
 import uuid
-from transformers import WhisperModel
+from musetalk.whisper.whisper import load_model as load_whisper
 
 import os, threading, cv2
 from dataclasses import dataclass
@@ -42,6 +42,7 @@ class MuseTalkPipeline:
                  device: Optional[torch.device] = None,
                  use_fp16: bool = True,
                  whisper_dir: str = "./models/whisper"):
+        self.whisper_src = whisper_dir 
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.weight_dtype = torch.float16 if (use_fp16 and self.device.type == "cuda") else torch.float32
 
@@ -88,10 +89,12 @@ class MuseTalkPipeline:
         self.timesteps = torch.tensor([0], device=self.device)  # MuseTalk runs at t=0
 
         # Load Whisper-tiny on CPU once
-        src = self.audio_processor.feature_extractor_path \
-              if os.path.isdir(self.audio_processor.feature_extractor_path) else "openai/whisper-tiny"
-        self.whisper = WhisperModel.from_pretrained(src).to(torch.device("cpu")).eval()
-        for p in self.whisper.parameters(): p.requires_grad = False
+        try:
+            self.whisper = load_whisper("tiny", device="cpu")
+        except Exception:
+            self.whisper = load_whisper("base", device="cpu")
+        for p in self.whisper.parameters():
+            p.requires_grad = False
 
     def warmup(self, frames: int = 2):
         """
