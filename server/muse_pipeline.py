@@ -109,30 +109,18 @@ class MuseTalkPipeline:
         - Build cyclic buffers
         - Cache FaceParsing (jaw/neck) with cheek protection
         """
+        # decide fps
         file_type = get_file_type(video_path)
-        frames: List[np.ndarray] = []
-        if file_type == "video":
-            reader = imageio.get_reader(video_path)
-            for im in reader:
-                frames.append(im[:, :, ::-1].copy())  # RGB->BGR for cv2
-            fps_detected = int(get_video_fps(video_path) or fps)
-        elif file_type == "image":
-            img_list = sorted(glob.glob(os.path.join(video_path, '*.[jpJP][pnPN]*[gG]')),
-                              key=lambda x: int(os.path.splitext(os.path.basename(x))[0]))
-            frames = read_imgs(img_list)
-            fps_detected = fps
-        else:
-            raise ValueError(f"Unsupported input: {video_path}")
+        fps_detected = int(get_video_fps(video_path) or fps) if file_type == "video" else fps
 
-        # face bboxes / coords
-        coord_list, frame_list = get_landmark_and_bbox(frames, bbox_shift)
+        coord_list, frame_list = get_landmark_and_bbox(video_path, bbox_shift)
         if not coord_list or all(b == coord_placeholder for b in coord_list):
             raise RuntimeError("No face detected during preparation; adjust bbox_shift or video quality")
 
-        bbox_shift_text = get_bbox_range(frames, bbox_shift)
+        bbox_shift_text = get_bbox_range(frame_list, bbox_shift)  # accepts frames list
 
-        # VAE latents for each frame crop (256x256)
-        input_latent_list: List[torch.Tensor] = []
+        # VAE latents per frame crop (256x256)
+        input_latent_list = []
         for bbox, frame in zip(coord_list, frame_list):
             if bbox == coord_placeholder:
                 continue
