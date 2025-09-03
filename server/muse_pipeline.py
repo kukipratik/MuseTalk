@@ -1,4 +1,7 @@
-import os, glob, threading, time, cv2, imageio
+import shutil
+import uuid
+
+import os, threading, cv2
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -6,7 +9,7 @@ import numpy as np
 import torch
 
 from musetalk.utils.utils import load_all_model, datagen, get_file_type, get_video_fps
-from musetalk.utils.preprocessing import get_landmark_and_bbox, read_imgs, coord_placeholder, get_bbox_range
+from musetalk.utils.preprocessing import get_landmark_and_bbox, coord_placeholder, get_bbox_range
 from musetalk.utils.face_parsing import FaceParsing  # jaw/neck parsing & cheek protection
 from musetalk.utils.blending import get_image
 from musetalk.utils.audio_processor import AudioProcessor  # whisper features (50fps) + chunking
@@ -82,6 +85,12 @@ class MuseTalkPipeline:
 
         self.timesteps = torch.tensor([0], device=self.device)  # MuseTalk runs at t=0
 
+        # Load Whisper-tiny on CPU once
+        src = self.audio_processor.feature_extractor_path \
+              if os.path.isdir(self.audio_processor.feature_extractor_path) else "openai/whisper-tiny"
+        self.whisper = WhisperModel.from_pretrained(src).to(torch.device("cpu")).eval()
+        for p in self.whisper.parameters(): p.requires_grad = False
+
     def warmup(self, frames: int = 2):
         """
         Tiny synthetic forward to pre-initialize CUDA kernels/allocators.
@@ -113,8 +122,35 @@ class MuseTalkPipeline:
         file_type = get_file_type(video_path)
         fps_detected = int(get_video_fps(video_path) or fps) if file_type == "video" else fps
 
-        coord_list, frame_list = get_landmark_and_bbox(video_path, bbox_shift)
+        img_list = None
+        tmp_frames_dir = None
+        if file_type == "video":
+            tmp_frames_dir = os.path.join("./results/prepared", f"frames_{uuid.uuid4().hex}")
+            os.makedirs(tmp_frames_dir, exist_ok=True)
+            cap = cv2.VideoCapture(video_path)
+            idx = 0
+            ok, frame = cap.read()
+            while ok:
+                # write as numbered png to keep natural sort
+                outp = os.path.join(tmp_frames_dir, f"{idx:06d}.png")
+                cv2.imwrite(outp, frame)
+                idx += 1
+                ok, frame = cap.read()
+            cap.release()
+            img_list = [os.path.join(tmp_frames_dir, f) for f in sorted(os.listdir(tmp_frames_dir)) if f.endswith(".png")]
+        else:
+            # if user already provided an image folder, expand it to a list
+            img_list = [os.path.join(video_path, f) for f in sorted(os.listdir(video_path))
+                        if f.lower().endswith((".png", ".jpg", ".jpeg"))]
+
+        # feed a **list of image paths** to the repo util
+        coord_list, frame_list = get_landmark_and_bbox(img_list, bbox_shift)
+
         if not coord_list or all(b == coord_placeholder for b in coord_list):
+            # cleanup frames dir on failure
+            if tmp_frames_dir is not None:
+                try: shutil.rmtree(tmp_frames_dir)
+                except: pass
             raise RuntimeError("No face detected during preparation; adjust bbox_shift or video quality")
 
         bbox_shift_text = get_bbox_range(frame_list, bbox_shift)  # accepts frames list
@@ -156,6 +192,11 @@ class MuseTalkPipeline:
             right_cheek_width=right_cheek_width,
             fps_default=fps_detected
         )
+
+        if tmp_frames_dir is not None:
+            try: shutil.rmtree(tmp_frames_dir)
+            except: pass
+
         return {
             "avatar_id": avatar_id,
             "fps": fps_detected,
@@ -193,7 +234,7 @@ class MuseTalkPipeline:
             whisper_input_features,
             device=torch.device("cpu"),
             weight_dtype=torch.float32,
-            whisper=None,                 # AudioProcessor manages its own whisper model
+            whisper=self.whisper,               # AudioProcessor manages its own whisper model
             librosa_length=librosa_len,
             fps=fps,
             audio_padding_length_left=audio_padding_left,
