@@ -5,6 +5,7 @@ avator_1:
  audio_clips:
     #  audio_1: "data/audio/1.wav"
      audio_2: "data/audio/2.wav"
+     audio_3: "data/audio/3.wav"
  
   
 
