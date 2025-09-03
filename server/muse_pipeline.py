@@ -1,5 +1,6 @@
 import shutil
 import uuid
+from transformers import WhisperModel
 
 import os, threading, cv2
 from dataclasses import dataclass
@@ -48,6 +49,7 @@ class MuseTalkPipeline:
         self.unet = None
         self.pe = None
         self.timesteps = None
+        self.whisper = None
 
         # audio feature extractor (Whisper-tiny on CPU) + helper
         self.audio_processor = AudioProcessor(feature_extractor_path=whisper_dir)
