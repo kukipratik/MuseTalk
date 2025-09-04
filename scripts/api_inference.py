@@ -205,7 +205,7 @@ class Avatar:
             json.dump(self.avatar_info, f)
 
         if os.path.isfile(self.video_path):
-            video2imgs(self.video_path, self.full_imgs_path, ext='.jpg', quality=95)
+            video2imgs(self.video_path, self.full_imgs_path, ext='.jpg', quality=100)
         else:
             print(f"copy files in {self.video_path}")
             files = [fn for fn in sorted(os.listdir(self.video_path)) if fn.lower().endswith(".jpg")]
