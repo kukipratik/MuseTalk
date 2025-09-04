@@ -26,6 +26,8 @@ import time
 import subprocess
 from types import SimpleNamespace
 
+IMAGE_EXTENSION = "png"
+
 # ---------------- Fallback Args --------------------
 args = SimpleNamespace(
     version="v15",
@@ -73,7 +75,7 @@ def fast_check_ffmpeg():
         return False
 
 # ----- OLDER -----
-def video2imgs(vid_path, save_path, ext='.png', cut_frame=10000000):
+def video2imgs(vid_path, save_path, cut_frame=10000000):
     cap = cv2.VideoCapture(vid_path)
     count = 0
     while True:
@@ -81,7 +83,7 @@ def video2imgs(vid_path, save_path, ext='.png', cut_frame=10000000):
             break
         ret, frame = cap.read()
         if ret:
-            cv2.imwrite(f"{save_path}/{count:08d}.png", frame)
+            cv2.imwrite(f"{save_path}/{count:08d}.{IMAGE_EXTENSION.lower}", frame)
             count += 1
         else:
             break
@@ -206,10 +208,10 @@ class Avatar:
 
         if os.path.isfile(self.video_path):
             # video2imgs(self.video_path, self.full_imgs_path, ext='.jpg', quality=100)
-            video2imgs(self.video_path, self.full_imgs_path, ext='.png')
+            video2imgs(self.video_path, self.full_imgs_path)
         else:
             print(f"copy files in {self.video_path}")
-            files = [fn for fn in sorted(os.listdir(self.video_path)) if fn.lower().endswith(".png")]
+            files = [fn for fn in sorted(os.listdir(self.video_path)) if fn.lower().endswith(f".{IMAGE_EXTENSION.lower()}")]
             for filename in files:
                 shutil.copyfile(f"{self.video_path}/{filename}", f"{self.full_imgs_path}/{filename}")
                 
@@ -245,7 +247,7 @@ class Avatar:
         self.mask_list_cycle = []
 
         for i, frame in enumerate(tqdm(self.frame_list_cycle)):
-            cv2.imwrite(f"{self.full_imgs_path}/{str(i).zfill(8)}.png", frame)
+            cv2.imwrite(f"{self.full_imgs_path}/{str(i).zfill(8)}.{IMAGE_EXTENSION.lower}", frame)
 
             x1, y1, x2, y2 = self.coord_list_cycle[i]
             if args.version == "v15":
@@ -254,7 +256,7 @@ class Avatar:
                 mode = "raw"
             mask, crop_box = get_image_prepare_material(frame, [x1, y1, x2, y2], fp=R.fp, mode=mode)
 
-            cv2.imwrite(f"{self.mask_out_path}/{str(i).zfill(8)}.png", mask)
+            cv2.imwrite(f"{self.mask_out_path}/{str(i).zfill(8)}.{IMAGE_EXTENSION.lower}", mask)
             self.mask_coords_list_cycle += [crop_box]
             self.mask_list_cycle.append(mask)
 
@@ -289,7 +291,7 @@ class Avatar:
             combine_frame = get_image_blending(ori_frame,res_frame,bbox,mask,mask_crop_box)
 
             if skip_save_images is False:
-                cv2.imwrite(f"{self.avatar_path}/tmp/{str(self.idx).zfill(8)}.png", combine_frame)
+                cv2.imwrite(f"{self.avatar_path}/tmp/{str(self.idx).zfill(8)}.{IMAGE_EXTENSION.lower}", combine_frame)
             self.idx = self.idx + 1
 
     @torch.no_grad()
@@ -350,7 +352,7 @@ class Avatar:
         if out_vid_name is not None and args.skip_save_images is False:
             # optional
             cmd_img2video = (
-                f"ffmpeg -y -v warning -r {fps} -f image2 -i {self.avatar_path}/tmp/%08d.png "
+                f"ffmpeg -y -v warning -r {fps} -f image2 -i {self.avatar_path}/tmp/%08d.{IMAGE_EXTENSION.lower} "
                 f"-c:v h264_nvenc -preset p4 -tune hq -pix_fmt yuv420p -cq 23 "
                 f"{self.avatar_path}/temp.mp4"
             )

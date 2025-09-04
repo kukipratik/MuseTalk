@@ -126,8 +126,6 @@ async def infer(
     video_path: Optional[str] = Form(None),
     # audio file (prefer 16kHz mono PCM .wav)
     audio: UploadFile = File(...),
-    image_format: str = Form("jpg"),   # "jpg" or "png"
-    jpg_quality: int = Form(95),       # used only if image_format="jpg"
 ):
     """
     Run MuseTalk inference using hot models.
@@ -159,12 +157,6 @@ async def infer(
                     audio_padding_length_right=2,
                     skip_save_images=False,  # saving frames+mp4 by default
                 )
-
-            # sanitize/normalize
-            img_fmt = image_format.lower()
-            if img_fmt not in ("jpg", "png"):
-                raise HTTPException(status_code=400, detail="image_format must be 'jpg' or 'png'")
-            jpg_q = max(1, min(100, int(jpg_quality)))
 
             # Create Avatar
             try:
