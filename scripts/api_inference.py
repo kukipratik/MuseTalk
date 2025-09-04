@@ -83,7 +83,7 @@ def video2imgs(vid_path, save_path, cut_frame=10000000):
             break
         ret, frame = cap.read()
         if ret:
-            cv2.imwrite(f"{save_path}/{count:08d}.{IMAGE_EXTENSION.lower}", frame)
+            cv2.imwrite(f"{save_path}/{count:08d}.{IMAGE_EXTENSION.lower()}", frame)
             count += 1
         else:
             break
@@ -247,7 +247,7 @@ class Avatar:
         self.mask_list_cycle = []
 
         for i, frame in enumerate(tqdm(self.frame_list_cycle)):
-            cv2.imwrite(f"{self.full_imgs_path}/{str(i).zfill(8)}.{IMAGE_EXTENSION.lower}", frame)
+            cv2.imwrite(f"{self.full_imgs_path}/{str(i).zfill(8)}.{IMAGE_EXTENSION.lower()}", frame)
 
             x1, y1, x2, y2 = self.coord_list_cycle[i]
             if args.version == "v15":
@@ -256,7 +256,7 @@ class Avatar:
                 mode = "raw"
             mask, crop_box = get_image_prepare_material(frame, [x1, y1, x2, y2], fp=R.fp, mode=mode)
 
-            cv2.imwrite(f"{self.mask_out_path}/{str(i).zfill(8)}.{IMAGE_EXTENSION.lower}", mask)
+            cv2.imwrite(f"{self.mask_out_path}/{str(i).zfill(8)}.{IMAGE_EXTENSION.lower()}", mask)
             self.mask_coords_list_cycle += [crop_box]
             self.mask_list_cycle.append(mask)
 
@@ -291,7 +291,7 @@ class Avatar:
             combine_frame = get_image_blending(ori_frame,res_frame,bbox,mask,mask_crop_box)
 
             if skip_save_images is False:
-                cv2.imwrite(f"{self.avatar_path}/tmp/{str(self.idx).zfill(8)}.{IMAGE_EXTENSION.lower}", combine_frame)
+                cv2.imwrite(f"{self.avatar_path}/tmp/{str(self.idx).zfill(8)}.{IMAGE_EXTENSION.lower()}", combine_frame)
             self.idx = self.idx + 1
 
     @torch.no_grad()
@@ -352,7 +352,7 @@ class Avatar:
         if out_vid_name is not None and args.skip_save_images is False:
             # optional
             cmd_img2video = (
-                f"ffmpeg -y -v warning -r {fps} -f image2 -i {self.avatar_path}/tmp/%08d.{IMAGE_EXTENSION.lower} "
+                f"ffmpeg -y -v warning -r {fps} -f image2 -i {self.avatar_path}/tmp/%08d.{IMAGE_EXTENSION.lower()} "
                 f"-c:v h264_nvenc -preset p4 -tune hq -pix_fmt yuv420p -cq 23 "
                 f"{self.avatar_path}/temp.mp4"
             )
