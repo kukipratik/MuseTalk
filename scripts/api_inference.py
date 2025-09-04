@@ -72,20 +72,51 @@ def fast_check_ffmpeg():
     except:
         return False
 
+# ----- OLDER -----
+# def video2imgs(vid_path, save_path, ext='.jpg', cut_frame=10000000):
+#     cap = cv2.VideoCapture(vid_path)
+#     count = 0
+#     while True:
+#         if count > cut_frame:
+#             break
+#         ret, frame = cap.read()
+#         if ret:
+#             cv2.imwrite(f"{save_path}/{count:08d}.jpg", frame)
+#             count += 1
+#         else:
+#             break
 
-def video2imgs(vid_path, save_path, ext='.jpg', cut_frame=10000000):
+def video2imgs(vid_path, save_path, ext=".jpg", cut_frame=10_000_000, quality=90):
+    os.makedirs(save_path, exist_ok=True)
+
     cap = cv2.VideoCapture(vid_path)
-    count = 0
-    while True:
-        if count > cut_frame:
-            break
-        ret, frame = cap.read()
-        if ret:
-            cv2.imwrite(f"{save_path}/{count:08d}.jpg", frame)
-            count += 1
-        else:
-            break
+    if not cap.isOpened():
+        raise RuntimeError(f"Cannot open video: {vid_path}")
 
+    ext = ext.lower()
+    if not ext.startswith("."):
+        ext = "." + ext
+    if ext in [".jpg", ".jpeg"]:
+        params = [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)]  # 0..100
+    elif ext == ".png":
+        params = [int(cv2.IMWRITE_PNG_COMPRESSION), 3]          # 0..9 (lower=faster)
+    else:
+        params = []  # unknown ext → let OpenCV decide
+
+    count = 0
+    while count <= cut_frame:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        filename = os.path.join(save_path, f"{count:08d}{ext}")
+        if params:
+            cv2.imwrite(filename, frame, params)
+        else:
+            cv2.imwrite(filename, frame)
+        count += 1
+
+    cap.release()
+    return count
 
 def osmakedirs(path_list):
     for path in path_list:
@@ -174,7 +205,7 @@ class Avatar:
             json.dump(self.avatar_info, f)
 
         if os.path.isfile(self.video_path):
-            video2imgs(self.video_path, self.full_imgs_path, ext='jpg')
+            video2imgs(self.video_path, self.full_imgs_path, ext='.jpg', quality=90)
         else:
             print(f"copy files in {self.video_path}")
             files = [fn for fn in sorted(os.listdir(self.video_path)) if fn.lower().endswith(".jpg")]
@@ -295,10 +326,10 @@ class Avatar:
 
         for _, (whisper_batch, latent_batch) in enumerate(tqdm(gen, total=int(np.ceil(float(video_num) / self.batch_size)))):
             audio_feature_batch = R.pe(whisper_batch.to(R.device, non_blocking=True))
-            latent_batch = latent_batch.to(device=R.device, dtype=R.unet.model.dtype, non_blocking=True)
+            latent_batch = (latent_batch.to(device=R.device, dtype=R.unet.model.dtype, non_blocking=True).contiguous(memory_format=torch.channels_last))
 
             pred_latents = R.unet.model(latent_batch, R.timesteps, encoder_hidden_states=audio_feature_batch).sample
-            pred_latents = pred_latents.to(device=R.device, dtype=R.vae.vae.dtype, non_blocking=True)
+            pred_latents = (pred_latents.to(device=R.device, dtype=R.vae.vae.dtype, non_blocking=True).contiguous(memory_format=torch.channels_last))
             recon = R.vae.decode_latents(pred_latents)
             for res_frame in recon:
                 res_frame_queue.put(res_frame)
@@ -399,14 +430,14 @@ if __name__ == "__main__":
     timesteps = torch.tensor([0], device=device)
 
     pe = pe.half().to(device)
-    vae.vae = vae.vae.half().to(device)
+    vae.vae = vae.vae.half().to(device) # type: ignore
     unet.model = unet.model.half().to(device)
 
     # Initialize audio processor and Whisper model
     audio_processor = AudioProcessor(feature_extractor_path=args.whisper_dir)
     weight_dtype = unet.model.dtype
     whisper = WhisperModel.from_pretrained(args.whisper_dir)
-    whisper = whisper.to(device=device, dtype=weight_dtype).eval()
+    whisper = whisper.to(device=device, dtype=weight_dtype).eval() # type: ignore
     whisper.requires_grad_(False)
 
     # Initialize face parser with configurable parameters based on version
@@ -422,12 +453,12 @@ if __name__ == "__main__":
     print(inference_config)
 
     for avatar_id in inference_config:
-        data_preparation = inference_config[avatar_id]["preparation"]
-        video_path = inference_config[avatar_id]["video_path"]
+        data_preparation = inference_config[avatar_id]["preparation"] # type: ignore
+        video_path = inference_config[avatar_id]["video_path"] # type: ignore
         if args.version == "v15":
             bbox_shift = 0
         else:
-            bbox_shift = inference_config[avatar_id]["bbox_shift"]
+            bbox_shift = inference_config[avatar_id]["bbox_shift"] # type: ignore
         avatar = Avatar(
             avatar_id=avatar_id,
             video_path=video_path,
@@ -435,7 +466,7 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             preparation=data_preparation)
 
-        audio_clips = inference_config[avatar_id]["audio_clips"]
+        audio_clips = inference_config[avatar_id]["audio_clips"] # type: ignore
         for audio_num, audio_path in audio_clips.items():
             print("Inferring using:", audio_path)
             avatar.inference(audio_path,

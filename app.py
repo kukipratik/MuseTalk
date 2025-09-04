@@ -14,6 +14,7 @@ from typing import Optional
 from contextlib import asynccontextmanager
 
 import torch
+import torch.backends.cudnn as cudnn
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
 from transformers import WhisperModel
@@ -40,11 +41,15 @@ DEFAULT_BATCH    = 20
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Warm models into THIS uvicorn worker; keep them resident for requests."""
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA not available: make sure the container sees the GPU.")
+    device = torch.device("cuda:0")
 
     # perf knobs
-    torch.backends.cudnn.benchmark = True
-    torch.backends.cuda.matmul.allow_tf32 = True
+    cudnn.benchmark = True
+    cudnn.allow_tf32 = True
+    if hasattr(torch, "set_float32_matmul_precision"):
+        torch.set_float32_matmul_precision("high")
 
     # --- load nets ---
     vae, unet, pe = load_all_model(
@@ -53,14 +58,14 @@ async def lifespan(app: FastAPI):
         unet_config=UNET_CONFIG_PATH,
         device=device,
     )
-    pe = pe.half().to(device)
-    vae.vae = vae.vae.half().to(device)
-    unet.model = unet.model.half().to(device)
+    pe = pe.to(device=device, dtype=torch.float16).eval()
+    vae.vae = vae.vae.to(device=device, dtype=torch.float16).to(memory_format=torch.channels_last).eval() # type: ignore
+    unet.model = unet.model.to(device=device, dtype=torch.float16).to(memory_format=torch.channels_last).eval() # type: ignore
 
     # audio + whisper
     audio_processor = AudioProcessor(feature_extractor_path=WHISPER_DIR)
     whisper = WhisperModel.from_pretrained(WHISPER_DIR, low_cpu_mem_usage=True)
-    whisper = whisper.to(device=device, dtype=torch.float16).eval()
+    whisper = whisper.to(device=device, dtype=torch.float16).eval() # type: ignore
     whisper.requires_grad_(False)
 
     # face parsing (used during avatar preparation)
@@ -139,7 +144,7 @@ async def infer(
         if preparation and not video_path:
             raise HTTPException(status_code=400, detail="video_path is required when preparation=True")
 
-        # inject argparse-like namespace used by Avatar (since we're not running CLI)
+        # inject argparse-like namespace used by Avatar
         import types, scripts.api_inference as rt
 
         with _PIPELINE_LOCK:
@@ -147,13 +152,13 @@ async def infer(
                 rt.args = types.SimpleNamespace(
                     version=VERSION,
                     extra_margin=10,
-                    parsing_mode="jaw",
+                    parsing_mode="jaw", # options: jaw or raw
                     audio_padding_length_left=2,
                     audio_padding_length_right=2,
                     skip_save_images=False,  # saving frames+mp4 by default
                 )
 
-            # Create Avatar (reuses injected runtime; NO model reloads)
+            # Create Avatar
             try:
                 avatar = Avatar(
                     avatar_id=avatar_id,
@@ -167,7 +172,11 @@ async def infer(
                 raise HTTPException(status_code=400, detail=str(e))
 
             # run inference; out file saved under results/.../vid_output/
-            out_name = "audio_upload"
+            out_name = "lisa_output"
+
+            # In production give dynamic name
+            # from datetime import datetime
+            # out_name = f"{avatar_id}_{datetime.utcnow().strftime('%Y%m%dT%H%M%S')}"
 
             try:
                 avatar.inference(audio_path, out_name, fps, skip_save_images=False)
@@ -179,7 +188,7 @@ async def infer(
             raise HTTPException(status_code=500, detail="Output MP4 not found after inference.")
 
     t1 = time.perf_counter()
-    print(f"- infer total: {(t1 - t0):.2f}s | avatar={avatar_id} fps={fps} prep={preparation}")
+    print(f"Final - infer total: {(t1 - t0):.2f}s | avatar={avatar_id} fps={fps} prep={preparation} \n\n")
 
     # return final video
     return FileResponse(out_mp4, media_type="video/mp4", filename=f"{avatar_id}.mp4")
