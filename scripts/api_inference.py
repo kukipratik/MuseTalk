@@ -317,12 +317,23 @@ class Avatar:
 
         if out_vid_name is not None and args.skip_save_images is False:
             # optional
-            cmd_img2video = f"ffmpeg -y -v warning -r {fps} -f image2 -i {self.avatar_path}/tmp/%08d.jpg -vcodec libx264 -vf format=yuv420p -crf 18 {self.avatar_path}/temp.mp4"
+            # cmd_img2video = f"ffmpeg -y -v warning -r {fps} -f image2 -i {self.avatar_path}/tmp/%08d.jpg -vcodec libx264 -vf format=yuv420p -crf 18 {self.avatar_path}/temp.mp4"
+
+            cmd_img2video = (
+                f"ffmpeg -y -v warning -r {fps} -f image2 -i {self.avatar_path}/tmp/%08d.jpg "
+                f"-c:v h264_nvenc -preset p4 -tune hq -pix_fmt yuv420p -cq 23 "
+                f"{self.avatar_path}/temp.mp4"
+            )
+
             print(cmd_img2video)
             os.system(cmd_img2video)
 
             output_vid = os.path.join(self.video_out_path, out_vid_name + ".mp4")  # on
-            cmd_combine_audio = f"ffmpeg -y -v warning -i {audio_path} -i {self.avatar_path}/temp.mp4 {output_vid}"
+            # mux audio without re-encoding video
+            cmd_combine_audio = (
+                f"ffmpeg -y -v warning -i {audio_path} -i {self.avatar_path}/temp.mp4 "
+                f"-c:v copy -c:a aac -shortest {output_vid}"
+            )
             print(cmd_combine_audio)
             os.system(cmd_combine_audio)
 
