@@ -1,5 +1,6 @@
 # Audio:
 ffmpeg -i input.mp3 -ac 1 -ar 16000 -c:a pcm_s16le audio_16k.wav
+audio fps = 50fps
 
 # Video:
 25 fps

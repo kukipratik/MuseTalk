@@ -59,7 +59,7 @@ class Avatar:
         self.avatar_id = avatar_id
         self.video_path = video_path
         self.bbox_shift = bbox_shift
-        # 根据版本设置不同的基础路径
+        # Set different base paths according to version
         if args.version == "v15":
             self.base_path = f"./results/{args.version}/avatars/{avatar_id}"
         else:  # v1
@@ -175,7 +175,7 @@ class Avatar:
             if args.version == "v15":
                 y2 = y2 + args.extra_margin
                 y2 = min(y2, frame.shape[0])
-                coord_list[idx] = [x1, y1, x2, y2]  # 更新coord_list中的bbox
+                coord_list[idx] = [x1, y1, x2, y2]  # Update bbox in coord_list
             crop_frame = frame[y1:y2, x1:x2]
             resized_crop_frame = cv2.resize(crop_frame, (256, 256), interpolation=cv2.INTER_LANCZOS4)
             latents = vae.get_latents_for_unet(resized_crop_frame)
@@ -242,7 +242,11 @@ class Avatar:
         ############################################## extract audio feature ##############################################
         start_time = time.time()
         # Extract audio features
-        whisper_input_features, librosa_length = audio_processor.get_audio_feature(audio_path, weight_dtype=weight_dtype)
+        audio_feature_result = audio_processor.get_audio_feature(audio_path, weight_dtype=weight_dtype)
+        if audio_feature_result is None:
+            print(f"Error: Failed to extract audio features from {audio_path}")
+            return
+        whisper_input_features, librosa_length = audio_feature_result
         whisper_chunks = audio_processor.get_whisper_chunk(
             whisper_input_features,
             device,
