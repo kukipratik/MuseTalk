@@ -86,7 +86,7 @@ def fast_check_ffmpeg():
 #         else:
 #             break
 
-def video2imgs(vid_path, save_path, ext=".jpg", cut_frame=10_000_000, quality=90):
+def video2imgs(vid_path, save_path, ext=".jpg", cut_frame=10_000_000, quality=95):
     os.makedirs(save_path, exist_ok=True)
 
     cap = cv2.VideoCapture(vid_path)
@@ -205,7 +205,7 @@ class Avatar:
             json.dump(self.avatar_info, f)
 
         if os.path.isfile(self.video_path):
-            video2imgs(self.video_path, self.full_imgs_path, ext='.jpg', quality=90)
+            video2imgs(self.video_path, self.full_imgs_path, ext='.jpg', quality=95)
         else:
             print(f"copy files in {self.video_path}")
             files = [fn for fn in sorted(os.listdir(self.video_path)) if fn.lower().endswith(".jpg")]
