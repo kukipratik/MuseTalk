@@ -73,50 +73,50 @@ def fast_check_ffmpeg():
         return False
 
 # ----- OLDER -----
-# def video2imgs(vid_path, save_path, ext='.jpg', cut_frame=10000000):
-#     cap = cv2.VideoCapture(vid_path)
-#     count = 0
-#     while True:
-#         if count > cut_frame:
-#             break
-#         ret, frame = cap.read()
-#         if ret:
-#             cv2.imwrite(f"{save_path}/{count:08d}.jpg", frame)
-#             count += 1
-#         else:
-#             break
-
-def video2imgs(vid_path, save_path, ext=".jpg", cut_frame=10_000_000, quality=95):
-    os.makedirs(save_path, exist_ok=True)
-
+def video2imgs(vid_path, save_path, ext='.png', cut_frame=10000000):
     cap = cv2.VideoCapture(vid_path)
-    if not cap.isOpened():
-        raise RuntimeError(f"Cannot open video: {vid_path}")
-
-    ext = ext.lower()
-    if not ext.startswith("."):
-        ext = "." + ext
-    if ext in [".jpg", ".jpeg"]:
-        params = [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)]  # 0..100
-    elif ext == ".png":
-        params = [int(cv2.IMWRITE_PNG_COMPRESSION), 3]          # 0..9 (lower=faster)
-    else:
-        params = []  # unknown ext → let OpenCV decide
-
     count = 0
-    while count <= cut_frame:
-        ret, frame = cap.read()
-        if not ret:
+    while True:
+        if count > cut_frame:
             break
-        filename = os.path.join(save_path, f"{count:08d}{ext}")
-        if params:
-            cv2.imwrite(filename, frame, params)
+        ret, frame = cap.read()
+        if ret:
+            cv2.imwrite(f"{save_path}/{count:08d}.png", frame)
+            count += 1
         else:
-            cv2.imwrite(filename, frame)
-        count += 1
+            break
 
-    cap.release()
-    return count
+# def video2imgs(vid_path, save_path, ext=".jpg", cut_frame=10_000_000, quality=95):
+#     os.makedirs(save_path, exist_ok=True)
+
+#     cap = cv2.VideoCapture(vid_path)
+#     if not cap.isOpened():
+#         raise RuntimeError(f"Cannot open video: {vid_path}")
+
+#     ext = ext.lower()
+#     if not ext.startswith("."):
+#         ext = "." + ext
+#     if ext in [".jpg", ".jpeg"]:
+#         params = [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)]  # 0..100
+#     elif ext == ".png":
+#         params = [int(cv2.IMWRITE_PNG_COMPRESSION), 3]          # 0..9 (lower=faster)
+#     else:
+#         params = []  # unknown ext → let OpenCV decide
+
+#     count = 0
+#     while count <= cut_frame:
+#         ret, frame = cap.read()
+#         if not ret:
+#             break
+#         filename = os.path.join(save_path, f"{count:08d}{ext}")
+#         if params:
+#             cv2.imwrite(filename, frame, params)
+#         else:
+#             cv2.imwrite(filename, frame)
+#         count += 1
+
+#     cap.release()
+#     return count
 
 def osmakedirs(path_list):
     for path in path_list:
@@ -205,10 +205,11 @@ class Avatar:
             json.dump(self.avatar_info, f)
 
         if os.path.isfile(self.video_path):
-            video2imgs(self.video_path, self.full_imgs_path, ext='.jpg', quality=100)
+            # video2imgs(self.video_path, self.full_imgs_path, ext='.jpg', quality=100)
+            video2imgs(self.video_path, self.full_imgs_path, ext='.png')
         else:
             print(f"copy files in {self.video_path}")
-            files = [fn for fn in sorted(os.listdir(self.video_path)) if fn.lower().endswith(".jpg")]
+            files = [fn for fn in sorted(os.listdir(self.video_path)) if fn.lower().endswith(".png")]
             for filename in files:
                 shutil.copyfile(f"{self.video_path}/{filename}", f"{self.full_imgs_path}/{filename}")
                 
@@ -244,7 +245,7 @@ class Avatar:
         self.mask_list_cycle = []
 
         for i, frame in enumerate(tqdm(self.frame_list_cycle)):
-            cv2.imwrite(f"{self.full_imgs_path}/{str(i).zfill(8)}.jpg", frame)
+            cv2.imwrite(f"{self.full_imgs_path}/{str(i).zfill(8)}.png", frame)
 
             x1, y1, x2, y2 = self.coord_list_cycle[i]
             if args.version == "v15":
@@ -253,7 +254,7 @@ class Avatar:
                 mode = "raw"
             mask, crop_box = get_image_prepare_material(frame, [x1, y1, x2, y2], fp=R.fp, mode=mode)
 
-            cv2.imwrite(f"{self.mask_out_path}/{str(i).zfill(8)}.jpg", mask)
+            cv2.imwrite(f"{self.mask_out_path}/{str(i).zfill(8)}.png", mask)
             self.mask_coords_list_cycle += [crop_box]
             self.mask_list_cycle.append(mask)
 
@@ -288,7 +289,7 @@ class Avatar:
             combine_frame = get_image_blending(ori_frame,res_frame,bbox,mask,mask_crop_box)
 
             if skip_save_images is False:
-                cv2.imwrite(f"{self.avatar_path}/tmp/{str(self.idx).zfill(8)}.jpg", combine_frame)
+                cv2.imwrite(f"{self.avatar_path}/tmp/{str(self.idx).zfill(8)}.png", combine_frame)
             self.idx = self.idx + 1
 
     @torch.no_grad()
@@ -348,10 +349,8 @@ class Avatar:
 
         if out_vid_name is not None and args.skip_save_images is False:
             # optional
-            # cmd_img2video = f"ffmpeg -y -v warning -r {fps} -f image2 -i {self.avatar_path}/tmp/%08d.jpg -vcodec libx264 -vf format=yuv420p -crf 18 {self.avatar_path}/temp.mp4"
-
             cmd_img2video = (
-                f"ffmpeg -y -v warning -r {fps} -f image2 -i {self.avatar_path}/tmp/%08d.jpg "
+                f"ffmpeg -y -v warning -r {fps} -f image2 -i {self.avatar_path}/tmp/%08d.png "
                 f"-c:v h264_nvenc -preset p4 -tune hq -pix_fmt yuv420p -cq 23 "
                 f"{self.avatar_path}/temp.mp4"
             )
