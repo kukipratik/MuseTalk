@@ -1,36 +1,59 @@
-diffusers==0.30.2
-accelerate==0.28.0
-numpy==1.23.5
-tensorflow==2.12.0
-tensorboard==2.12.0
-opencv-python==4.9.0.80
-soundfile==0.12.1
-transformers==4.39.2
-huggingface_hub==0.30.2
-librosa==0.11.0
-einops==0.8.1
+#############################
+# Web / config / API
+#############################
+fastapi>=0.111,<1
+uvicorn[standard]>=0.30,<1
+pydantic>=2.6,<3
+python-multipart>=0.0.9
+python-dotenv>=1.0
+requests>=2.31
 
-gdown
-imageio[ffmpeg]
-
-omegaconf
-ffmpeg-python
-moviepy
-
-fastapi 
-uvicorn[standard] 
-python-multipart
-
-# kokoro requirements
-python-dotenv
-requests
-pydantic
-scipy
-soxr
-
-# whisper requirements
+#############################
+# Whisper (Faster-Whisper) + media
+#############################
 faster-whisper
 ctranslate2
 aiortc
 av
 resampy
+soundfile==0.12.1
+
+#############################
+# Audio / DSP stack (aligned with TF 2.12)
+#############################
+numpy==1.23.5
+scipy==1.10.1
+librosa==0.11.0
+soxr==0.3.7
+
+#############################
+# Kokoro ONNX (CPU runtime to avoid CUDA clash)
+#############################
+kokoro-onnx
+onnxruntime==1.18.*
+
+#############################
+# MuseTalk / HF ecosystem
+#############################
+transformers==4.39.2
+huggingface_hub==0.30.2
+diffusers==0.30.2
+accelerate==0.28.0
+einops==0.8.1
+opencv-python==4.9.0.80
+gradio==5.24.0
+
+#############################
+# TensorFlow (CUDA 11.8 build; compatible with NumPy 1.23.x)
+#############################
+tensorflow==2.12.0
+tensorboard==2.12.0
+
+#############################
+# Utilities
+#############################
+gdown
+imageio[ffmpeg]>=2.34
+ffmpeg-python>=0.2.0
+moviepy>=1.0.3
+omegaconf>=2.3.0
