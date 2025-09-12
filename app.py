@@ -26,6 +26,8 @@ from musetalk.utils.audio_processor import AudioProcessor
 
 from scripts.api_inference import inject_runtime, Avatar
 
+from routers import stt_routes
+
 import threading
 _PIPELINE_LOCK = threading.Lock()
 
@@ -192,3 +194,5 @@ async def infer(
 
     # return final video
     return FileResponse(out_mp4, media_type="video/mp4", filename=f"{avatar_id}.mp4")
+
+app.include_router(stt_routes.router, prefix="/api/stt")

@@ -9,10 +9,8 @@ transformers==4.39.2
 huggingface_hub==0.30.2
 librosa==0.11.0
 einops==0.8.1
-gradio==5.24.0
 
 gdown
-requests
 imageio[ffmpeg]
 
 omegaconf
@@ -22,3 +20,17 @@ moviepy
 fastapi 
 uvicorn[standard] 
 python-multipart
+
+# kokoro requirements
+python-dotenv
+requests
+pydantic
+scipy
+soxr
+
+# whisper requirements
+faster-whisper
+ctranslate2
+aiortc
+av
+resampy
