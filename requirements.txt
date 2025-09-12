@@ -27,7 +27,7 @@ librosa==0.11.0
 soxr==0.3.7
 
 #############################
-# Kokoro ONNX (CPU runtime to avoid CUDA clash)
+# Kokoro ONNX (CPU runtime to avoid CUDA clash with TF)
 #############################
 kokoro-onnx
 onnxruntime==1.18.*
@@ -41,10 +41,9 @@ diffusers==0.30.2
 accelerate==0.28.0
 einops==0.8.1
 opencv-python==4.9.0.80
-gradio==5.24.0
 
 #############################
-# TensorFlow (CUDA 11.8 build; compatible with NumPy 1.23.x)
+# TensorFlow (CUDA 11.8 build; matches NumPy 1.23.x)
 #############################
 tensorflow==2.12.0
 tensorboard==2.12.0
