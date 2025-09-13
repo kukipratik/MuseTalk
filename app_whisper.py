@@ -1,12 +1,13 @@
 import os
+import time
 import tempfile
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 from faster_whisper import WhisperModel
 
 # ---------------- Config ----------------
-WHISPER_MODEL = os.getenv("WHISPER_MODEL", "large-v2")   # you can change: tiny.en / base.en / small.en / medium.en / large-v2
-WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")      # "cuda" if you want GPU
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "distil-large-v2")   # you can change: tiny.en / base.en / small.en / medium.en / large-v2
+WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")             # "cuda" if you want GPU
 WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")  # "float16" if GPU, "int8" if CPU
 
 # ---------------- Init ----------------
@@ -22,7 +23,7 @@ app = FastAPI(title="Whisper STT Test API", version="1.0")
 
 @app.post("/transcribe")
 async def transcribe(audio: UploadFile = File(...)):
-    """Upload audio file -> returns transcribed text"""
+    """Upload audio file -> returns transcribed text with timing"""
     if not audio.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 
@@ -35,18 +36,22 @@ async def transcribe(audio: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to buffer upload: {e}")
 
-    # run inference
+    # run inference with timer
     try:
+        t0 = time.perf_counter()
         segments, info = model.transcribe(
             tmp_path,
             beam_size=1,
             vad_filter=True,
         )
+        t1 = time.perf_counter()
+
         full_text = "".join([seg.text for seg in segments]).strip()
         return JSONResponse({
             "text": full_text,
             "language": info.language,
-            "language_probability": info.language_probability
+            "language_probability": info.language_probability,
+            "time_taken_sec": round(t1 - t0, 2)
         })
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {e}")
