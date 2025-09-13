@@ -11,10 +11,10 @@ requests>=2.31
 #############################
 # Whisper (Faster-Whisper) + media
 #############################
-faster-whisper
+faster-whisper==1.0.2
 ctranslate2
 aiortc
-av
+av==11.0.0
 resampy
 soundfile==0.12.1
 
