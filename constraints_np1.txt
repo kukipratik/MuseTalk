@@ -13,3 +13,4 @@ onnxruntime-gpu==1.22.0
 
 # kokoro version that works with NumPy 1.x
 kokoro-onnx==0.3.3
+python-multipart

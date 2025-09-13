@@ -1,5 +1,8 @@
 # ---------------- env must be set BEFORE heavy imports ----------------
 import os
+os.environ.setdefault("ORT_DISABLE_CUDA", "1")  # stop ORT from probing CUDA 12/cuDNN 9
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")  # optional, avoids OMP spam
+
 os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 os.environ.setdefault("CUDA_MODULE_LOADING", "LAZY")
