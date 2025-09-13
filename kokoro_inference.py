@@ -1,40 +1,51 @@
-import os, numpy as np, soundfile as sf
+import os
+import numpy as np
+import soundfile as sf
 import onnxruntime as ort
 from kokoro_onnx import Kokoro
 
-print("Available providers:", ort.get_available_providers())
-
 MODEL_PATH = "models/kokoro/kokoro-v1.0.onnx"
 VOICES_PATH = "models/kokoro/voices.json"
+os.makedirs("kokoro_outputs", exist_ok=True)
 
-# reduce CPU spin + threads
-os.environ.setdefault("OMP_NUM_THREADS", "1")
-os.environ.setdefault("MKL_NUM_THREADS", "1")
-os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
-os.environ.setdefault("BLIS_NUM_THREADS", "1")
-os.environ.setdefault("OMP_WAIT_POLICY", "PASSIVE")
+# Show what ORT sees
+avail = ort.get_available_providers()
+print("Available providers:", avail)
 
-# build a CUDA-only session (no TensorRT)
+# Prefer CUDA, then CPU; but only include ones that actually exist
+preferred = [p for p in ["CUDAExecutionProvider", "CPUExecutionProvider"] if p in avail]
+
+# Build a session (try CUDA first, fallback to CPU)
 so = ort.SessionOptions()
-so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-so.intra_op_num_threads = 1
-so.inter_op_num_threads = 1
+so.log_severity_level = 3  # quieter logs
 
-sess = ort.InferenceSession(
-    MODEL_PATH,
-    sess_options=so,
-    providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
-)
+session = None
+errors = []
+for ep in preferred:
+    try:
+        session = ort.InferenceSession(MODEL_PATH, sess_options=so, providers=[ep])
+        print(f"Using ONNX Runtime provider: {ep}")
+        break
+    except Exception as e:
+        errors.append((ep, str(e)))
 
-# pass the prebuilt session into Kokoro (supported in 0.3.3)
-tts = Kokoro(MODEL_PATH, VOICES_PATH, session=sess)
+if session is None:
+    # final safe fallback: pure CPU provider name in case list was empty
+    session = ort.InferenceSession(MODEL_PATH, sess_options=so, providers=["CPUExecutionProvider"])
+    print("Fell back to CPUExecutionProvider")
+    if errors:
+        print("CUDA/TensorRT init errors (ignored):")
+        for ep, msg in errors:
+            print(f"  - {ep}: {msg.splitlines()[0]}")
 
-# --- warmup (tiny text) to JIT numba & ORT kernels ---
-_ = tts.create("warmup", voice="af_sarah", speed=1.0, lang="en-us")
+# Create Kokoro normally, then inject our session
+tts = Kokoro(MODEL_PATH, VOICES_PATH)
+# kokoro_onnx exposes a .session attribute we can override
+tts.session = session
 
-# real run
-text = "GPU check run, hopefully fast and quiet on the CPU."
+text = "Quick GPU check. If CUDA is available I'll be fast; otherwise I'll run on CPU."
 samples, sr = tts.create(text, voice="af_sarah", speed=1.0, lang="en-us")
-print("dtype:", getattr(samples, "dtype", None), "len:", len(np.array(samples)), "sr:", sr)
+
+print("dtype:", getattr(samples, "dtype", None), "shape:", np.array(samples).shape, "sr:", sr)
 sf.write("kokoro_outputs/gpu_check.wav", samples, sr, subtype="PCM_16")
-print("Saved kokoro_outputs/gpu_check.wav")
+print("Saved `kokoro_outputs/gpu_check.wav`")
