@@ -6,8 +6,8 @@ from faster_whisper import WhisperModel
 
 # ---------------- Config ----------------
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small.en")   # you can change: tiny.en / base.en / small.en / medium.en / large-v2
-WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")      # "cuda" if you want GPU
-WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")  # "float16" if GPU, "int8" if CPU
+WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "gpu")      # "cuda" if you want GPU
+WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "float16")  # "float16" if GPU, "int8" if CPU
 
 # ---------------- Init ----------------
 print(f"[whisper] Loading model '{WHISPER_MODEL}' on {WHISPER_DEVICE} ({WHISPER_COMPUTE_TYPE})")
